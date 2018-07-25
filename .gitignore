@@ -1,4 +1,6 @@
 __pycache__
+processing/plots
+processing/.ipynb_checkpoints
 *.nc
 *.pkl
 *.txt
