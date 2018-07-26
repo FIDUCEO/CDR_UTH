@@ -19,13 +19,14 @@ import processing.CDRs as CDRs
 import processing.FCDRs as FCDRs
 import processing.plots as plots
 
-fcdr_path = '/scratch/uni/u237/users/tlang/UTH/CDRs/FCDRs'
+fcdr_path = '/scratch/uni/u237/users/tlang/CDR/FCDRs'
 #fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
 #fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/HIRS'
 regr_params_path = '/scratch/uni/u237/users/tlang/UTH/radiative_transfer/uth_definition'
+cdr_path = ''
 
 start_date = datetime.date(2015, 1, 1)
-end_date = datetime.date(2015, 1, 2)
+end_date = datetime.date(2015, 1, 1)
 instrument = 'MHS'
 satellite = 'Noaa18'
 if instrument == 'HIRS':
@@ -72,15 +73,14 @@ while date <= end_date:
         
             # gridded daily CDRs
             gridded_days.append(CDRs.CDR.GriddedCDRFromFCDRs(fcdrs, lat_boundaries=lat_boundaries, 
-                                                        lon_boundaries=lon_boundaries, resolution=resolution,
-                                                        uncertainties=True))
+                                                        lon_boundaries=lon_boundaries, resolution=resolution))
         
         date += day_delta
 
     # monthly_average
     monthly_mean = CDRs.CDR.AveragedCDRFromCDRs(gridded_days)
     # write to NetCDF
-    ds = monthly_mean.toNetCDF('Very first trial version.')
+    ds = monthly_mean.toNetCDF(cdr_path, 'Very first trial version.')
 #    # save with pickle
 #    outfile = 'CDR_{}_{}_{}.pkl'.format(monthly_mean.time_coverage_start.strftime('%Y-%m'), monthly_mean.instrument, monthly_mean.satellite)
 #    with open(outfile, 'wb') as output:

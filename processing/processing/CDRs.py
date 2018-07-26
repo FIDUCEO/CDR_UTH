@@ -14,6 +14,7 @@ import time
 from datetime import datetime
 from fiduceo.cdr.writer.cdr_writer import CDRWriter
 from netCDF4 import Dataset
+import processing.utils as utils
 
 class CDR:
     def __init__(self, source=None, lat=None, lon=None, BT=None,
@@ -39,7 +40,7 @@ class CDR:
     @classmethod
     def GriddedCDRFromFCDRs(cls, FCDRs,
                             lat_boundaries=[-90, 90], lon_boundaries =[-179, 180], 
-                            resolution=1., uncertainties=True):
+                            resolution=1.):
         """ Creates one CDR from from a list of FCDRs.
         The CDR contains mean brightness temperatures and UTH binned to a 
         lat/lon grid as well as 3 uncertainty classes for every grid cell. 
@@ -50,15 +51,13 @@ class CDR:
             lat_boundaries (list): lower and upper boundary for latitude-grid
             lon_boundaries (list): lower and upper boundary for longitude-grid
             resolution (float): resolution of lat/lon grid [degree] (default: 1.0)
-            uncertainties (boolean): False if uncertainties should not be 
-                propagated
         """
         t1 = time.clock()
-        ret = cls()
+        
         instrument = FCDRs[0].instrument
         if instrument == 'HIRS':
             uth_channel = 12
-            u_types = ['independent', 'structured']
+            u_types = ['independent', 'structured'] # this will change in newer FCDR format
         elif instrument == 'MHS' or instrument == 'AMSUB':
             uth_channel = 3
             u_types = ['independent', 'common', 'structured']
@@ -66,31 +65,10 @@ class CDR:
         branches = ['ascending', 'descending']
         
         # latitude and longitude bins and their centers
-        lat_bins = np.arange(lat_boundaries[0] - 0.5 * resolution, lat_boundaries[-1] + 0.5 * resolution + 1., resolution)
-        lat_centers = [(a + b) / 2 for a, b in zip(lat_bins, lat_bins[1:])]
-        lon_bins = np.arange(lon_boundaries[0] - 0.5 * resolution, lon_boundaries[-1] + 0.5 * resolution + 1, resolution)
-        lon_centers = [(a + b) / 2 for a, b in zip(lon_bins, lon_bins[1:])]
-        
-        # get time information
-#        start_time = min([FCDRs[i].start_time for i in range(len(FCDRs))])
-#        end_time = max([FCDRs[i].end_time for i in range(len(FCDRs))])
+        lat_bins, lon_bins, lat_centers, lon_centers = utils.getLatLonBins(
+                lat_boundaries, lon_boundaries, resolution)
         
         # initialization:
-        # variables to read from FCDRs
-        files = []
-        latitudes = {b: np.array([], dtype=np.float16) for b in branches}
-        longitudes = {b: np.array([], dtype=np.float16) for b in branches}
-        brightness_temp = {b: np.array([]) for b in branches}
-        uth = {b: np.array([]) for b in branches}
-        u_Tb = {t: {b: np.array([]) for b in branches} for t in u_types}
-        u_uth = {t: {b: np.array([]) for b in branches} for t in u_types}
-        scanline = {b: np.array([]) for b in branches}
-        scanline_max = {b: 0 for b in branches}
-        second_of_day = {b: np.array([]) for b in branches} 
-        acquisition_time = {b: np.array([]) for b in branches} 
-        latitudes_diff = {b: np.array([], dtype=np.float16) for b in branches}
-        longitudes_diff = {b: np.array([], dtype=np.float16) for b in branches}
-
         # dictionaries for grouped quantities
         group_variances_Tb = dict.fromkeys(u_types)
         group_variances_uth = dict.fromkeys(u_types)
@@ -107,68 +85,20 @@ class CDR:
         start_time = dict.fromkeys(branches)
         end_time = dict.fromkeys(branches)
  
-        # functions for conversion from longitudes and latitudes to grid indices
-        lon2ind = lambda lon: lon_centers.index(lon)
-        lat2ind = lambda lat: lat_centers.index(lat)
-
         # collect data from all FCDRs
-        node_mask = {}
-        for f in FCDRs:
-            
-            files.append(f.file)
-            # get all masks
-            if not hasattr(f, 'node_mask'):
-                f.generate_node_mask()
-            
-            node_mask['ascending'] = f.node_mask
-            node_mask['descending'] = ~f.node_mask
-            total_mask = f.total_mask
-            quality_and_issue_mask = f.quality_and_issue_mask
-            diff_mask = np.logical_and(np.logical_not(quality_and_issue_mask), total_mask)
+        collected_data, collected_data_diff, collected_files = utils.collectFCDRData(
+                FCDRs, u_types, uth_channel=uth_channel)
 
-            # distinguish between ascending and descending node and apply all masks
-            for b in branches: 
-                if f.latitudes[np.logical_and(~total_mask, node_mask[b])].size:
-                    latitudes[b] = np.append(latitudes[b], f.latitudes[np.logical_and(~total_mask, node_mask[b])])
-                    longitudes[b] = np.append(longitudes[b], f.longitudes[np.logical_and(~total_mask, node_mask[b])])
-                    brightness_temp[b] = np.append(brightness_temp[b], f.brightness_temp[uth_channel][np.logical_and(~total_mask, node_mask[b])])
-                    uth[b] = np.append(uth[b], f.uth[np.logical_and(~total_mask, node_mask[b])])
-                    second_of_day[b] = np.append(second_of_day[b], f.second_of_day[np.logical_and(~total_mask, node_mask[b])])
-                    acquisition_time[b] = np.append(acquisition_time[b], f.acquisition_time[np.logical_and(~total_mask, node_mask[b])])
-                    latitudes_diff[b] = np.append(latitudes_diff[b], f.latitudes[np.logical_and(node_mask[b], diff_mask)])
-                    longitudes_diff[b] = np.append(longitudes_diff[b], f.longitudes[np.logical_and(node_mask[b], diff_mask)])
-                    
-                    if uncertainties:
-                        # needed for structured uncertainties
-                        scanline[b] = np.append(scanline[b], scanline_max[b] + f.scanline[np.logical_and(~total_mask, node_mask[b])])
-                        scanline_max[b] = np.max(scanline[b])
-                        # get 3 types of uncertainties
-                        for t in u_types:
-                            u_Tb[t][b] = np.append(u_Tb[t][b], f.u_Tb[t][uth_channel][np.logical_and(~total_mask, node_mask[b])])
-                            u_uth[t][b] = np.append(u_uth[t][b], f.u_uth[t][np.logical_and(~total_mask, node_mask[b])])
-        
         for b in branches:
             print(b)
 #            longitudes[b][longitudes[b] == -180] = 180.
 #            longitudes_all[b][longitudes_all[b] == -180] = 180.
             #TODO: stimmt das so???
-            longitudes[b][longitudes[b] < -180 + 0.5 * resolution] = 180.
-            longitudes_diff[b][longitudes_diff[b] < -180 + 0.5 * resolution] = 180.
-            # combine all values in a pandas dataframe
-            data_dict = {'latitude': latitudes[b], 'longitude': longitudes[b],
-                             'brightness_temp': brightness_temp[b], 
-                             'uth': uth[b], 'scanline': scanline[b],
-                             'second_of_day': second_of_day[b],
-                             'acquisition_time': acquisition_time[b]}
-            data_dict_diff = {'latitude': latitudes_diff[b],
-                                'longitude': longitudes_diff[b]}
-            
-            for t in u_types:
-                data_dict['u_Tb_{}'.format(t)] = u_Tb[t][b]
-                data_dict['u_uth_{}'.format(t)] = u_uth[t][b]
-                
-            data = pd.DataFrame(data_dict)
-            data_diff = pd.DataFrame(data_dict_diff)
+            collected_data['longitude'][b][collected_data['longitude'][b] < -180 + 0.5 * resolution] = 180.
+            collected_data_diff['longitude'][b][collected_data_diff['longitude'][b] < -180 + 0.5 * resolution] = 180.
+            # combine all values of this branch in a pandas dataframe
+            data = pd.DataFrame(utils.flattenDict(collected_data, b))
+            data_diff = pd.DataFrame(utils.flattenDict(collected_data_diff, b))
             
             # throw away data outside the specified new grid
             data = data[np.logical_and((data['latitude'] <= lat_bins[-1]),(data['latitude'] > lat_bins[0]))].reset_index()
@@ -186,19 +116,18 @@ class CDR:
                 print('dataframe is empty!')
             else:
                 # bin data to latitude and longitude bins
-                data['lat_bin'] = pd.cut(data.latitude, lat_bins, labels=lat_centers).apply(lat2ind)
-                data['lon_bin'] = pd.cut(data.longitude, lon_bins, labels=lon_centers).apply(lon2ind)
-                data = data.drop(['latitude', 'longitude'], 1)
-                data_diff['lat_bin'] = pd.cut(data_diff.latitude, lat_bins, labels=lat_centers).apply(lat2ind)
-                data_diff['lon_bin'] = pd.cut(data_diff.longitude, lon_bins, labels=lon_centers).apply(lon2ind)
-                data_diff = data_diff.drop(['latitude', 'longitude'], 1)
+                data = utils.binData(
+                        data, lat_bins, lon_bins, lat_centers, lon_centers)
+                data_diff = utils.binData(
+                        data_diff, lat_bins, lon_bins, lat_centers, lon_centers)
+                                
+                # group data by latitude and longitude bins
+                data_grouped = data.groupby([data.lat_bin, data.lon_bin], sort=False)
+                data_diff_grouped = data_diff.groupby([data_diff.lat_bin, data_diff.lon_bin], sort=False)
                 
                 # get time of first and last data point going into this CDR
                 start_time[b] = datetime.fromtimestamp(np.min(data.acquisition_time))
                 end_time[b] = datetime.fromtimestamp(np.max(data.acquisition_time))
-                # group data by latitude and longitude bins
-                data_grouped = data.groupby([data.lat_bin, data.lon_bin], sort=False)
-                data_diff_grouped = data_diff.groupby([data_diff.lat_bin, data_diff.lon_bin], sort=False)
                 
                 # go through all groups and propagate uncertainties
                 for name, group in data_grouped:
@@ -219,34 +148,33 @@ class CDR:
                     second_of_day_min[b][lat_ind, lon_ind] = np.min(second_of_day_group)
                     second_of_day_max[b][lat_ind, lon_ind] = np.max(second_of_day_group)
 
-                    if uncertainties:
-                        # Get structured, independent and common uncertainties of this group
-                        for t in u_types:
-                            group_variances_Tb[t] = np.array(group['u_Tb_{}'.format(t)])
-                            group_variances_uth[t] = np.array(group['u_uth_{}'.format(t)])
-                        
-                        # Create a covariance matrix for structured uncertainties:
-                        # scanlines of data points in this group
-                        scanlines = np.array(group.scanline)
-                        # construct correlation matrix from scanline differences
-                        scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
-                        corr = np.maximum(np.zeros((group_size, group_size)), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
-                        # calculate covariance matrix from correlation matrix
-                        S_struct_Tb = np.multiply(corr, np.outer(group_variances_Tb['structured'], group_variances_Tb['structured']))
-                        S_struct_uth = np.multiply(corr, np.outer(group_variances_uth['structured'], group_variances_uth['structured']))
-                        
-                        # Calculate uncertainties (standard deviations) for the current group: 
-                        # independent uncertainty for this grid cell (Use Law of the Propagation of Uncertainties for independent uncertainties only)
-                        u_Tb_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_Tb['independent'] ** 2)) / group_size
-                        u_uth_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_uth['independent'] ** 2)) / group_size
-                        # common uncertainty for this grid cell (fully correlated uncertainties --> uncertainty of average is average of uncertainties)
-                        # Only MW FCDRs contain common uncertainties
-                        if instrument == 'MHS' or instrument == 'AMSUB':
-                            u_Tb_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
-                            u_uth_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_uth['common'])
-                        # structured uncertainty for this grid cell
-                        u_Tb_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb)) / group_size
-                        u_uth_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_uth)) / group_size
+                    # Get structured, independent and common uncertainties of this group
+                    for t in u_types:
+                        group_variances_Tb[t] = np.array(group['u_Tb_{}'.format(t)])
+                        group_variances_uth[t] = np.array(group['u_uth_{}'.format(t)])
+                    
+                    # Create a covariance matrix for structured uncertainties:
+                    # scanlines of data points in this group
+                    scanlines = np.array(group.scanline)
+                    # construct correlation matrix from scanline differences
+                    scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
+                    corr = np.maximum(np.zeros((group_size, group_size)), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
+                    # calculate covariance matrix from correlation matrix
+                    S_struct_Tb = np.multiply(corr, np.outer(group_variances_Tb['structured'], group_variances_Tb['structured']))
+                    S_struct_uth = np.multiply(corr, np.outer(group_variances_uth['structured'], group_variances_uth['structured']))
+                    
+                    # Calculate uncertainties (standard deviations) for the current group: 
+                    # independent uncertainty for this grid cell (Use Law of the Propagation of Uncertainties for independent uncertainties only)
+                    u_Tb_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_Tb['independent'] ** 2)) / group_size
+                    u_uth_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_uth['independent'] ** 2)) / group_size
+                    # common uncertainty for this grid cell (fully correlated uncertainties --> uncertainty of average is average of uncertainties)
+                    # Only MW FCDRs contain common uncertainties
+                    if instrument == 'MHS' or instrument == 'AMSUB':
+                        u_Tb_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
+                        u_uth_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_uth['common'])
+                    # structured uncertainty for this grid cell
+                    u_Tb_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb)) / group_size
+                    u_uth_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_uth)) / group_size
                 
                 # go through all groups that would contain additional data without cloud filtering:
                 for name, group in data_diff_grouped:
@@ -255,7 +183,8 @@ class CDR:
                     group_size = len(group)
                     count_all[b][lat_ind, lon_ind] += group_size
 
-        # return
+        # return variables
+        ret = cls()
         # lat, lon
         ret.lat = np.array(lat_centers)
         ret.lon = np.array(lon_centers)
@@ -275,20 +204,19 @@ class CDR:
         ret.second_of_day_min = second_of_day_min
         ret.second_of_day_max = second_of_day_max
         # FCDR files included
-        ret.source = files
+        ret.source = collected_files
         # instrument and satellite
         ret.instrument = FCDRs[0].instrument
         ret.satellite = FCDRs[0].satellite
-        
-        if uncertainties:
-            ret.u_Tb = u_Tb_gridded
-            ret.u_uth = u_uth_gridded
+        # uncertainties
+        ret.u_Tb = u_Tb_gridded
+        ret.u_uth = u_uth_gridded
         t2 = time.clock()
         print(t2 - t1)
         return ret
 
     @classmethod
-    def AveragedCDRFromCDRs(cls, CDRs, uncertainties=True):
+    def AveragedCDRFromCDRs(cls, CDRs):
         """ Combines several CDRs to one CDR by calculating an ordinary average
         of brightness temperature and UTH for every grid cell. Uncertainties 
         are propagated using the Law of the Propagation of Uncertainty for the
@@ -312,14 +240,13 @@ class CDR:
         num_timesteps = len(CDRs)
         Tb_mean = dict.fromkeys(branches)
         UTH_mean = dict.fromkeys(branches)
+        u_Tb = {t: dict.fromkeys(branches) for t in u_types}
+        u_uth = {t: dict.fromkeys(branches) for t in u_types}
         Tb_std = dict.fromkeys(branches)
         UTH_std = dict.fromkeys(branches)
         count = dict.fromkeys(branches)
         count_all = dict.fromkeys(branches)
         count_overpasses = dict.fromkeys(branches)
-#        a_time_coverage_start = dict.fromkeys(branches)
-#        a_time_coverage_end = dict.fromkeys(branches)
-#        a_time_coverage_duration = dict.fromkeys(branches)
         second_of_day_min = dict.fromkeys(branches)
         second_of_day_max = dict.fromkeys(branches)
         time_ranges = dict.fromkeys(branches)
@@ -328,10 +255,6 @@ class CDR:
         time_coverage_start = CDRs[0].time_coverage_start
         time_coverage_end = CDRs[-1].time_coverage_end
         time_coverage_duration = pd.Timedelta(time_coverage_end - time_coverage_start).isoformat()
-        
-        if uncertainties:
-            u_Tb = {t: dict.fromkeys(branches) for t in u_types}
-            u_uth = {t: dict.fromkeys(branches) for t in u_types}
 
         for b in branches:
             for i in range(num_timesteps):
@@ -358,15 +281,14 @@ class CDR:
             
             time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
             
-            if uncertainties:
-                notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
-                for t in ['independent', 'structured']:
-                    u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-                    u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-                    
-                if instrument == 'MHS' or instrument == 'AMSUB':
-                    u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
-                    u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
+            notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
+            for t in ['independent', 'structured']:
+                u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
+                u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
+                
+            if instrument == 'MHS' or instrument == 'AMSUB':
+                u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
+                u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
         
         ret.lon = CDRs[0].lon
         ret.lat = CDRs[0].lat
@@ -387,14 +309,13 @@ class CDR:
         ret.time_ranges = time_ranges
         ret.instrument = CDRs[0].instrument
         ret.satellite = CDRs[0].satellite
-        if uncertainties:
-            ret.u_BT = u_Tb
-            ret.u_uth = u_uth
+        ret.u_BT = u_Tb
+        ret.u_uth = u_uth
         ret.source = files
 
         return ret
     
-    def toNetCDF(self, comment_on_version):
+    def toNetCDF(self, CDR_path, comment_on_version):
         """ Saves the attributes of an averaged CDR created by 
         AveragedCDRFromCDRs to a NetCDF file using the CDRWriter by Tom Block.
         
@@ -414,7 +335,6 @@ class CDR:
         numlats = len(self.lat)
         start_time = self.time_coverage_start
         end_time = self.time_coverage_end
-        CDR_path = ''
         CDR_filename = CDRWriter.create_file_name_CDR('UTH', sensor=self.instrument, platform=self.satellite, start=start_time, end=end_time, type='L3', version='1.0')
         ds = CDRWriter.createTemplate('UTH', numlons, numlats)
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
@@ -518,7 +438,8 @@ class CDR:
                                            channel=3, resolution=1., 
                                            uncertainties=True):
         """ Creates one brightness temperature CDR from from a list of FCDRs 
-        and does the full uncertainty propagation.
+        and does the full uncertainty propagation. Only needed for examplary
+        uncertainty propagation for structured uncertainties. 
         
         WARNING: for big grids this consumes too much memory!!!
         
@@ -685,17 +606,6 @@ class CDR:
                 if uncertainties:
                     # compose covariance matrix with structured uncertainties
                     print('S_struct')
-#                    S_struct_rows = np.array([])
-#                    S_struct_cols = np.array([])
-#                    S_struct_values = np.array([])
-#                    for row, s in enumerate(data[b].scanline):
-#                        small_diff_ind = np.where(np.abs(data[b].scanline - s) < 8)[0] 
-#                        small_diff = np.abs(data[b].scanline[small_diff_ind] - s)
-#                        numel_row = len(small_diff_ind)
-#                        S_struct_rows = np.append(S_struct_rows, np.ones(numel_row) * row)
-#                        S_struct_cols = np.append(S_struct_cols, small_diff_ind)
-#                        covariances = (1 - small_diff / 8) * (data[b].U_struct[row] * data[b].U_struct[small_diff_ind])
-#                        S_struct_values = np.hstack((S_struct_values, covariances))
                     
                     scanlines = np.array(data[b].scanline)
                     # construct correlation matrix from scanline differences
