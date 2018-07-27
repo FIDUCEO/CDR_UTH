@@ -19,6 +19,8 @@ import processing.CDRs as CDRs
 import processing.FCDRs as FCDRs
 import processing.plots as plots
 
+version_comment = 'Very first trial version.'
+
 fcdr_path = '/scratch/uni/u237/users/tlang/CDR/FCDRs'
 #fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
 #fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/HIRS'
@@ -30,7 +32,7 @@ end_date = datetime.date(2015, 1, 1)
 instrument = 'MHS'
 satellite = 'Noaa18'
 if instrument == 'HIRS':
-    viewing_angles = [i for i in range(16, 42)]
+    viewing_angles = [i for i in range(16, 42)] # or 19-38?
 else:
     viewing_angles= [i for i in range(29, 61)]
         
@@ -63,12 +65,9 @@ while date <= end_date:
         
         if filenames_new:
             for file in filenames_new:
-                f = FCDRs.FCDR.from_netcdf(
+                f = FCDRs.FCDR.fromNetcdf(
                          fcdr_path, file, viewing_angles)
-                f.generate_total_mask()
-                f.generate_cloud_mask()
-                f.generate_quality_and_issue_mask()
-                f.calc_uth(regr_slopes, regr_intercepts)
+                f.calcUTH(regr_slopes, regr_intercepts)
                 fcdrs.append(f)
         
             # gridded daily CDRs
@@ -80,7 +79,7 @@ while date <= end_date:
     # monthly_average
     monthly_mean = CDRs.CDR.AveragedCDRFromCDRs(gridded_days)
     # write to NetCDF
-    ds = monthly_mean.toNetCDF(cdr_path, 'Very first trial version.')
+    ds = monthly_mean.toNetCDF(cdr_path, comment_on_version=version_comment)
 #    # save with pickle
 #    outfile = 'CDR_{}_{}_{}.pkl'.format(monthly_mean.time_coverage_start.strftime('%Y-%m'), monthly_mean.instrument, monthly_mean.satellite)
 #    with open(outfile, 'wb') as output:

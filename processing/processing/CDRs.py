@@ -22,12 +22,15 @@ class CDR:
                  uth=None, u_Tb=None, u_uth=None,
                  instrument=None, satellite=None,
                  time_coverage_start=None, time_coverage_end=None,
-                 observation_count=None, observation_count_all=None):
+                 time_ranges=None,
+                 observation_count=None, observation_count_all=None,
+                 overpass_count=None):
         source = source
         instrument = instrument
         satellite = satellite
         time_coverage_start = time_coverage_start
         time_coverage_end = time_coverage_end
+        time_ranges = time_ranges
         lat = lat
         lon = lon
         BT = BT
@@ -36,6 +39,7 @@ class CDR:
         u_uth = u_uth
         observation_count = observation_count
         observation_count_all = observation_count_all
+        overpass_count = overpass_count
 
     @classmethod
     def GriddedCDRFromFCDRs(cls, FCDRs,
@@ -44,7 +48,7 @@ class CDR:
         """ Creates one CDR from from a list of FCDRs.
         The CDR contains mean brightness temperatures and UTH binned to a 
         lat/lon grid as well as 3 uncertainty classes for every grid cell. 
-        Uncertainty correlations between grid cells are NOT propagated!!!
+        Uncertainty correlations between grid cells are NOT propagated!
         
         Parameters:
             FCDRs (list): list fo FCDR objects
@@ -80,8 +84,9 @@ class CDR:
         count = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
         count_all = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
         count_overpasses = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
-        second_of_day_min = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
-        second_of_day_max = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
+        second_of_day_min = np.ones((len(lat_centers), len(lon_centers))) * np.nan 
+        second_of_day_max = np.ones((len(lat_centers), len(lon_centers))) * np.nan 
+        time_ranges = dict.fromkeys(branches)
         start_time = dict.fromkeys(branches)
         end_time = dict.fromkeys(branches)
  
@@ -145,8 +150,9 @@ class CDR:
                     count_all[b][lat_ind, lon_ind] = group_size
                     count_overpasses[b][lat_ind, lon_ind] += 1
                     second_of_day_group = np.array(group.second_of_day)#second_of_day_grouped[(lat_ind, lon_ind)]
-                    second_of_day_min[b][lat_ind, lon_ind] = np.min(second_of_day_group)
-                    second_of_day_max[b][lat_ind, lon_ind] = np.max(second_of_day_group)
+                    second_of_day_min[lat_ind, lon_ind] = np.min(second_of_day_group)
+                    second_of_day_max[lat_ind, lon_ind] = np.max(second_of_day_group)
+                    time_ranges[b] = np.stack((second_of_day_min, second_of_day_max))
 
                     # Get structured, independent and common uncertainties of this group
                     for t in u_types:
@@ -197,12 +203,11 @@ class CDR:
         ret.uth = UTH_gridded
         ret.observation_count = count
         ret.observation_count_all = count_all
-        ret.observation_count_overpasses = count_overpasses
+        ret.overpass_count = count_overpasses
         # time information
         ret.time_coverage_start = min(start_time.values())
         ret.time_coverage_end = max(end_time.values())
-        ret.second_of_day_min = second_of_day_min
-        ret.second_of_day_max = second_of_day_max
+        ret.time_ranges = time_ranges
         # FCDR files included
         ret.source = collected_files
         # instrument and satellite
@@ -217,10 +222,10 @@ class CDR:
 
     @classmethod
     def AveragedCDRFromCDRs(cls, CDRs):
-        """ Combines several CDRs to one CDR by calculating an ordinary average
-        of brightness temperature and UTH for every grid cell. Uncertainties 
-        are propagated using the Law of the Propagation of Uncertainty for the
-        case of an ordenary average.
+        """ Combines several CDRs to one averaged CDR by calculating an ordinary 
+        average of brightness temperature and UTH for every grid cell. 
+        Uncertainties are propagated using the Law of the Propagation of 
+        Uncertainty for the case of an ordenary average.
         
         Parameters:
             CDRs (list of CDRs): List of CDR objects (e.g. 30 daily CDRs that
@@ -268,15 +273,17 @@ class CDR:
             count[b][count[b] == 0] = -32767
             count_all[b] = np.nansum([CDRs[i].observation_count_all[b] for i in range(num_timesteps)], axis=0)
             count_all[b][count_all[b] == 0] = -32767
-            count_overpasses[b] = np.nansum([CDRs[i].observation_count_overpasses[b] for i in range(num_timesteps)], axis=0)
+            count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)
             
 #            a_time_coverage_start[b] = CDRs[0].a_time_coverage_start[b]
 #            a_time_coverage_end[b] = CDRs[-1].a_time_coverage_end[b]
 #            a_time_coverage_duration[b] = pd.Timedelta(a_time_coverage_end[b] - a_time_coverage_start[b]).isoformat()
             
-            second_of_day_min[b] = np.nanmin([CDRs[i].second_of_day_min[b] for i in range(num_timesteps)], axis=0)
+            #second_of_day_min[b] = np.nanmin([CDRs[i].second_of_day_min[b] for i in range(num_timesteps)], axis=0)
+            second_of_day_min[b] = np.nanmin([CDRs[i].time_ranges[b][0] for i in range(num_timesteps)], axis=0)
             second_of_day_min[b][np.isnan(second_of_day_min[b])] = 4294967295
-            second_of_day_max[b] = np.nanmax([CDRs[i].second_of_day_max[b] for i in range(num_timesteps)], axis=0)
+            #second_of_day_max[b] = np.nanmax([CDRs[i].second_of_day_max[b] for i in range(num_timesteps)], axis=0)
+            second_of_day_max[b] = np.nanmax([CDRs[i].time_ranges[b][1] for i in range(num_timesteps)], axis=0)
             second_of_day_max[b][np.isnan(second_of_day_max[b])] = 4294967295
             
             time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
@@ -302,7 +309,7 @@ class CDR:
         ret.uth_inhomogeneity = UTH_std
         ret.observation_count = count
         ret.observation_count_all = count_all
-        ret.observation_count_overpasses = count_overpasses
+        ret.overpass_count = count_overpasses
         ret.time_coverage_start = time_coverage_start 
         ret.time_coverage_end = time_coverage_end
         ret.time_coverage_duration = time_coverage_duration
@@ -372,7 +379,7 @@ class CDR:
         ds.attrs['geospatial_lon_units'] = 'deg'
         ds.attrs['history'] = 'Created on {}.'.format(datetime.now().strftime('%Y-%m-%d %H:%M'))
         ds.attrs['references'] = ''
-        ds.attrs['comment'] = ''
+        ds.attrs['comment'] = comment_on_version
         ds.attrs['auxiliary_data'] = ''
         ds.attrs['configuration'] = ''
         
@@ -497,7 +504,7 @@ class CDR:
         for f in FCDRs:
             # get all masks
             if not hasattr(f, 'node_mask'):
-                f.generate_node_mask()
+                f.generateNodeMask()
             
             node_mask['ascending'] = f.node_mask
             node_mask['descending'] = ~f.node_mask

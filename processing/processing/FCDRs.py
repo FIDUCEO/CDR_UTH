@@ -41,7 +41,7 @@ class FCDR:
     
     #TODO: adapt to new HIRS FCDR format
     @classmethod    
-    def from_netcdf(cls, fcdr_path, filename, viewing_angles):
+    def fromNetcdf(cls, fcdr_path, filename, viewing_angles):
         """ Read FCDR from NetCDF file.
         
         Parameters:
@@ -74,6 +74,7 @@ class FCDR:
             ret.quality_mask = f.variables['quality_pixel_bitmask'][:, viewing_angles]
         
         # for some reason latitudes and longitudes have to be scaled in HIRS FCDRs
+        # maybe this will change with newer HIRS FCDR version!
         scale_factor = {}
         scale_factor['HIRS'] = 0.001 
         scale_factor['AMSUB'] = 1
@@ -94,13 +95,9 @@ class FCDR:
         scanline_array = np.tile(scanline, (numangles, 1)).T
         
         # make an array containing acquisition time for every pixel
-        midnight = int(datetime.datetime(file_info['start_time'].year, file_info['start_time'].month, file_info['start_time'].day, 0, 0).strftime('%s'))            
-        second_of_day = acquisition_time - midnight
+        second_of_day = utils.getSecondOfDay(acquisition_time)
         second_of_day = np.tile(second_of_day, (numangles, 1)).T
-        if file_info['start_time'].day < file_info['end_time'].day:
-            second_of_day[np.where(second_of_day >= 86400)] = second_of_day[np.where(second_of_day >= 86400)] - 86400
-        ret.second_of_day = second_of_day
-        ret.acquisition_time = np.tile(acquisition_time, (numangles, 1)).T
+        acquisition_time = np.tile(acquisition_time, (numangles, 1)).T
 
         # get brightness temperature, uncertainties and quality issue mask 
         brightness_temp = {}
@@ -146,10 +143,12 @@ class FCDR:
         ret.viewing_angles = viewing_angles
         ret.scanline = scanline_array
         ret.channels = channels
+        ret.second_of_day = second_of_day
+        ret.acquisition_time = acquisition_time
         
         return ret
     
-    def calc_uth(self, slope_params, intercept_params):
+    def calcUTH(self, slope_params, intercept_params):
         """ Calculate Upper Tropospheric Humidity (UTH) from brightness 
         temperatures.
         
@@ -188,7 +187,7 @@ class FCDR:
         self.uth = uth
         self.u_uth = u_uth
         
-    def generate_cloud_mask(self):
+    def generateCloudMask(self):
         #TODO: thresholds are only valid for AMSU-B so far
         """ Find pixels that are contaminated with clouds.
         Reference for microwave sensors: 
@@ -219,7 +218,7 @@ class FCDR:
         
         self.cloud_mask = cloud_mask
     
-    def generate_quality_and_issue_mask(self):
+    def generateQualityAndIssueMask(self):
         """ Combines quality mask and quality issue mask to one mask, only for
         UTH channel.
         """
@@ -242,23 +241,23 @@ class FCDR:
                 
         self.quality_and_issue_mask = quality_and_issue_mask
   
-    def generate_total_mask(self):
+    def generateTotalMask(self):
         """ Combines quality mask and cloud mask to one total mask for the UTH
         channel.
         """
         total_mask = {}
         
         if ~hasattr(self, 'cloud_mask'):
-            self.generate_cloud_mask()
+            self.generateCloudMask()
         if ~hasattr(self, 'quality_and_issue_mask'):
-            self.generate_quality_and_issue_mask()
+            self.generateQualityAndIssueMask()
             # total mask is combination of cloud mask, general quality mask
             # and quality issue mask of the UTH channel
         total_mask = np.logical_or(self.cloud_mask, self.quality_and_issue_mask)
         
         self.total_mask = total_mask
         
-    def generate_node_mask(self):
+    def generateNodeMask(self):
         """ Generates a mask indicating where the satellite was in ascending/
         descending node. True indicates ascending, False indicates descending.
         """

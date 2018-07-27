@@ -105,7 +105,13 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
         files.append(f.file)
         # get all masks
         if not hasattr(f, 'node_mask'):
-            f.generate_node_mask()
+            f.generateNodeMask()
+        if not hasattr(f, 'total_mask'):
+            f.generateTotalMask()
+        if not hasattr(f, 'cloud_mask'):
+            f.generateCloudMask()
+        if not hasattr(f, 'quality_and_issue_mask'):
+            f.generateQualityAndIssueMask();
         
         node_mask['ascending'] = f.node_mask
         node_mask['descending'] = ~f.node_mask
@@ -204,4 +210,16 @@ def getLatLonBins(lat_boundaries, lon_boundaries, resolution):
     lon_centers = [(a + b) / 2 for a, b in zip(lon_bins, lon_bins[1:])]
     
     return lat_bins, lon_bins, lat_centers, lon_centers
+
+def getSecondOfDay(acquisition_time):
+    """ Transforms pixel acquisition time to time in seconds of day.
     
+        acquisition_time (array): vector containing (e.g. scanline) acquisition times
+    """
+    start_time = datetime.datetime.fromtimestamp(acquisition_time[0])
+    midnight = int(datetime.datetime(start_time.year, start_time.month, start_time.day, 0, 0).strftime('%s'))            
+    second_of_day = acquisition_time - midnight
+    
+    second_of_day[np.where(second_of_day >= 86400)] = second_of_day[np.where(second_of_day >= 86400)] - 86400
+    
+    return second_of_day
