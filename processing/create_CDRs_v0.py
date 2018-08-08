@@ -21,16 +21,19 @@ import processing.plots as plots
 
 version_comment = 'Very first trial version.'
 
-fcdr_path = '/scratch/uni/u237/users/tlang/CDR/FCDRs'
-#fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
+#fcdr_path = '/scratch/uni/u237/users/tlang/CDR/FCDRs'
+fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
 #fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/HIRS'
 regr_params_path = '/scratch/uni/u237/users/tlang/UTH/radiative_transfer/uth_definition'
-cdr_path = ''
 
-start_date = datetime.date(2015, 1, 1)
-end_date = datetime.date(2015, 1, 1)
+start_date = datetime.date(2011, 1, 1)
+end_date = datetime.date(2011, 12, 31)
 instrument = 'MHS'
 satellite = 'Noaa18'
+
+cdr_path = join('CDR_files', str(instrument.upper()), str(satellite.upper()), 
+                str(start_date.year))
+
 if instrument == 'HIRS':
     viewing_angles = [i for i in range(16, 42)] # or 19-38?
 else:
@@ -46,11 +49,9 @@ regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(instrument.lowe
 regr_slopes, regr_intercepts = utils.regression_params_from_xml(join(regr_params_path, regr_params_file))
 
 filenames = []
-
 dates = []
 date = start_date
 day_delta = datetime.timedelta(days=1)
-
 last_day_of_month = datetime.date(start_date.year, start_date.month, monthrange(start_date.year, start_date.month)[1])
 
 while date <= end_date:
@@ -79,13 +80,15 @@ while date <= end_date:
     # monthly_average
     monthly_mean = CDRs.CDR.AveragedCDRFromCDRs(gridded_days)
     # write to NetCDF
-    ds = monthly_mean.toNetCDF(cdr_path, comment_on_version=version_comment)
+    if not monthly_mean.is_empty:
+        ds = monthly_mean.toNetCDF(cdr_path, comment_on_version=version_comment)
 #    # save with pickle
 #    outfile = 'CDR_{}_{}_{}.pkl'.format(monthly_mean.time_coverage_start.strftime('%Y-%m'), monthly_mean.instrument, monthly_mean.satellite)
 #    with open(outfile, 'wb') as output:
 #        pickle.dump(monthly_mean, output, pickle.HIGHEST_PROTOCOL)
     
     last_day_of_month = datetime.date(date.year, date.month, monthrange(date.year, date.month)[1])
+    cdr_path = join('CDR_files', str(instrument.upper()), str(satellite.upper()), str(date.year))
 
 #%% Plot overview of important CDR variables
 u_types = ['independent', 'structured', 'common']
@@ -96,7 +99,7 @@ lon, lat = np.meshgrid(monthly_mean.lon, monthly_mean.lat)
 im = plots.plotTb(monthly_mean, b, ax=ax[0], cmap=plt.get_cmap('temperature', 20))
 ax[0].set_title('Tb')
 fig.colorbar(im, ax=ax[0])
-im = plots.plotUTH(monthly_mean, b, ax=ax[1], cmap=plt.get_cmap('speed', 20))
+im = plots.plotUTH(monthly_mean, b, ax=ax[1], cmap=plt.get_cmap('speed', 20), vmin=0, vmax=100)
 ax[1].set_title('UTH')
 fig.colorbar(im, ax=ax[1])
 im = plots.plotCDRQuantity(monthly_mean.uth_inhomogeneity[b], monthly_mean.lat, monthly_mean.lon, ax=ax[2], cmap=plt.get_cmap('speed', 20))

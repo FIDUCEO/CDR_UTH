@@ -66,7 +66,7 @@ def getFileInfo(filename):
     info = filename.split('_')
     
     file_info = {}
-    file_info['instrument'] = info[3].upper()
+    file_info['instrument'] = ''.join([i for i in info[3].upper() if not i.isdigit()])
     file_info['satellite'] = info[4].upper()
     start_time_str = info[5]
     end_time_str = info[6]
@@ -223,3 +223,44 @@ def getSecondOfDay(acquisition_time):
     second_of_day[np.where(second_of_day >= 86400)] = second_of_day[np.where(second_of_day >= 86400)] - 86400
     
     return second_of_day
+
+def getFirstNotEmptyCDR(CDRs):
+    """ Returns the first CDR which is not empty from a list of CDRs.
+    Parameters:
+        CDRs: List of CDR objects
+    """
+    if (np.any([not c.is_empty for c in CDRs])):
+        return next(c for c in CDRs if not c.is_empty)
+    else:
+        return None
+
+def getLastNotEmptyCDR(CDRs):
+    """ Returns the last CDR which is not empty from a list of CDRs.
+    Parameters:
+        CDRs: List of CDR objects
+    """
+    if (np.any([not c.is_empty for c in CDRs])):
+        return next(c for c in CDRs[::-1] if not c.is_empty)
+    else:
+        return None
+
+def getCDRQualityMask(observation_counts, overpass_counts):
+    """ Creates a quality bitmask for the monthly mean CDR based on observation
+    and overpass counts.
+    
+    Bit 1 is set to 1, if there are less than 6 overpasses in a grid cell
+    Bit 2 is set to 1, if there are less than 150 observations in a grid cell
+    
+    Parameters:
+        observation_counts: number of pixels that were used to retrieve UTH
+            in every grid cell in this month
+        overpass_counts: number of satellite overpasses in every grid cell
+            in one month
+    """
+    bitmask = np.zeros(observation_counts.shape)
+    
+    bitmask[overpass_counts < 6] = bitmask[overpass_counts < 6] + 1
+    bitmask[observation_counts < 150] = bitmask[observation_counts < 150] + 2
+    
+    return bitmask
+    

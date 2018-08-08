@@ -12,6 +12,7 @@ from scipy.sparse import csr_matrix, csc_matrix, diags, bmat, block_diag
 import matplotlib.pyplot as plt 
 import time
 from datetime import datetime
+from calendar import monthrange
 from fiduceo.cdr.writer.cdr_writer import CDRWriter
 from netCDF4 import Dataset
 import processing.utils as utils
@@ -84,11 +85,14 @@ class CDR:
         count = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
         count_all = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
         count_overpasses = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
-        second_of_day_min = np.ones((len(lat_centers), len(lon_centers))) * np.nan 
-        second_of_day_max = np.ones((len(lat_centers), len(lon_centers))) * np.nan 
+        second_of_day_min = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
+        second_of_day_max = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
         time_ranges = dict.fromkeys(branches)
         start_time = dict.fromkeys(branches)
         end_time = dict.fromkeys(branches)
+        time_coverage_start = np.nan
+        time_coverage_end = np.nan
+        is_empty = False
  
         # collect data from all FCDRs
         collected_data, collected_data_diff, collected_files = utils.collectFCDRData(
@@ -119,6 +123,7 @@ class CDR:
             if data.empty and data_diff.empty:
                 # no overpass in the selected grid
                 print('dataframe is empty!')
+                is_empty = True
             else:
                 # bin data to latitude and longitude bins
                 data = utils.binData(
@@ -150,9 +155,9 @@ class CDR:
                     count_all[b][lat_ind, lon_ind] = group_size
                     count_overpasses[b][lat_ind, lon_ind] += 1
                     second_of_day_group = np.array(group.second_of_day)#second_of_day_grouped[(lat_ind, lon_ind)]
-                    second_of_day_min[lat_ind, lon_ind] = np.min(second_of_day_group)
-                    second_of_day_max[lat_ind, lon_ind] = np.max(second_of_day_group)
-                    time_ranges[b] = np.stack((second_of_day_min, second_of_day_max))
+                    second_of_day_min[b][lat_ind, lon_ind] = np.min(second_of_day_group)
+                    second_of_day_max[b][lat_ind, lon_ind] = np.max(second_of_day_group)
+
 
                     # Get structured, independent and common uncertainties of this group
                     for t in u_types:
@@ -188,7 +193,15 @@ class CDR:
                     lon_ind = name[1]
                     group_size = len(group)
                     count_all[b][lat_ind, lon_ind] += group_size
+                    
+                
 
+            time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
+            
+        if not data.empty:
+            time_coverage_start  = min(start_time.values())
+            time_coverage_end = max(end_time.values())
+        
         # return variables
         ret = cls()
         # lat, lon
@@ -205,11 +218,12 @@ class CDR:
         ret.observation_count_all = count_all
         ret.overpass_count = count_overpasses
         # time information
-        ret.time_coverage_start = min(start_time.values())
-        ret.time_coverage_end = max(end_time.values())
+        ret.time_coverage_start = time_coverage_start
+        ret.time_coverage_end = time_coverage_end
         ret.time_ranges = time_ranges
         # FCDR files included
         ret.source = collected_files
+        ret.is_empty = is_empty
         # instrument and satellite
         ret.instrument = FCDRs[0].instrument
         ret.satellite = FCDRs[0].satellite
@@ -243,83 +257,101 @@ class CDR:
         
         branches = ['descending', 'ascending']
         num_timesteps = len(CDRs)
+        num_lons = len(CDRs[0].lon)
+        num_lats = len(CDRs[0].lat)
         Tb_mean = dict.fromkeys(branches)
         UTH_mean = dict.fromkeys(branches)
         u_Tb = {t: dict.fromkeys(branches) for t in u_types}
         u_uth = {t: dict.fromkeys(branches) for t in u_types}
-        Tb_std = dict.fromkeys(branches)
-        UTH_std = dict.fromkeys(branches)
+        Tb_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
+        UTH_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
         count = dict.fromkeys(branches)
         count_all = dict.fromkeys(branches)
         count_overpasses = dict.fromkeys(branches)
+        quality_bitmask = dict.fromkeys(branches)
         second_of_day_min = dict.fromkeys(branches)
         second_of_day_max = dict.fromkeys(branches)
         time_ranges = dict.fromkeys(branches)
         files = []
-
-        time_coverage_start = CDRs[0].time_coverage_start
-        time_coverage_end = CDRs[-1].time_coverage_end
-        time_coverage_duration = pd.Timedelta(time_coverage_end - time_coverage_start).isoformat()
-
-        for b in branches:
-            for i in range(num_timesteps):
-                files.extend(CDRs[i].source)
-            notnan_count = np.sum([~np.isnan(CDRs[i].BT[b]) for i in range(num_timesteps)], axis=0)
-            Tb_mean[b] = np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0)
-            UTH_mean[b] = np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) 
-            Tb_std[b] = np.nanstd([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0)
-            UTH_std[b] = np.nanstd([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0)
-            count[b] = np.nansum([CDRs[i].observation_count[b] for i in range(num_timesteps)], axis=0)
-            count[b][count[b] == 0] = -32767
-            count_all[b] = np.nansum([CDRs[i].observation_count_all[b] for i in range(num_timesteps)], axis=0)
-            count_all[b][count_all[b] == 0] = -32767
-            count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)
-            
-#            a_time_coverage_start[b] = CDRs[0].a_time_coverage_start[b]
-#            a_time_coverage_end[b] = CDRs[-1].a_time_coverage_end[b]
-#            a_time_coverage_duration[b] = pd.Timedelta(a_time_coverage_end[b] - a_time_coverage_start[b]).isoformat()
-            
-            #second_of_day_min[b] = np.nanmin([CDRs[i].second_of_day_min[b] for i in range(num_timesteps)], axis=0)
-            second_of_day_min[b] = np.nanmin([CDRs[i].time_ranges[b][0] for i in range(num_timesteps)], axis=0)
-            second_of_day_min[b][np.isnan(second_of_day_min[b])] = 4294967295
-            #second_of_day_max[b] = np.nanmax([CDRs[i].second_of_day_max[b] for i in range(num_timesteps)], axis=0)
-            second_of_day_max[b] = np.nanmax([CDRs[i].time_ranges[b][1] for i in range(num_timesteps)], axis=0)
-            second_of_day_max[b][np.isnan(second_of_day_max[b])] = 4294967295
-            
-            time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
-            
-            notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
-            for t in ['independent', 'structured']:
-                u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-                u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-                
-            if instrument == 'MHS' or instrument == 'AMSUB':
-                u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
-                u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
+        is_empty = False
         
-        ret.lon = CDRs[0].lon
-        ret.lat = CDRs[0].lat
-        ret.geospatial_lat_resolution = CDRs[0].geospatial_lat_resolution
-        ret.geospatial_lon_resolution = CDRs[0].geospatial_lon_resolution
-        ret.lat_bnds = np.stack((CDRs[0].lat_bins[0:-1], CDRs[0].lat_bins[1:])).T
-        ret.lon_bnds = np.stack((CDRs[0].lon_bins[0:-1], CDRs[0].lon_bins[1:])).T
-        ret.BT = Tb_mean
-        ret.uth = UTH_mean
-        ret.BT_inhomogeneity = Tb_std
-        ret.uth_inhomogeneity = UTH_std
-        ret.observation_count = count
-        ret.observation_count_all = count_all
-        ret.overpass_count = count_overpasses
-        ret.time_coverage_start = time_coverage_start 
-        ret.time_coverage_end = time_coverage_end
-        ret.time_coverage_duration = time_coverage_duration
-        ret.time_ranges = time_ranges
-        ret.instrument = CDRs[0].instrument
-        ret.satellite = CDRs[0].satellite
-        ret.u_BT = u_Tb
-        ret.u_uth = u_uth
-        ret.source = files
-
+        first_not_empty = utils.getFirstNotEmptyCDR(CDRs)
+        last_not_empty = utils.getLastNotEmptyCDR(CDRs)
+        
+        if first_not_empty is not None:
+            time_coverage_start = first_not_empty.time_coverage_start
+            time_coverage_end = last_not_empty.time_coverage_end
+            time_coverage_duration = pd.Timedelta(time_coverage_end - time_coverage_start).isoformat()
+    
+            for b in branches:
+                for i in range(num_timesteps):
+                    files.extend(CDRs[i].source)
+                notnan_count = np.sum([~np.isnan(CDRs[i].BT[b]) for i in range(num_timesteps)], axis=0)
+                Tb_mean[b] = np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0)
+                UTH_mean[b] = np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) 
+                #Tb_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].BT[b][notnan_count > 1] - Tb_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
+                #UTH_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].uth[b][notnan_count > 1] - UTH_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
+                Tb_std[b] = np.nanstd([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0, ddof=1)
+                UTH_std[b] = np.nanstd([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0, ddof=1)
+                count[b] = np.nansum([CDRs[i].observation_count[b] for i in range(num_timesteps)], axis=0)
+                count[b][count[b] == 0] = -32767
+                count_all[b] = np.nansum([CDRs[i].observation_count_all[b] for i in range(num_timesteps)], axis=0)
+                count_all[b][count_all[b] == 0] = -32767
+                count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)
+                # set new quality flags based on counts
+                quality_bitmask[b] = utils.getCDRQualityMask(count[b], count_overpasses[b])
+                
+    #            a_time_coverage_start[b] = CDRs[0].a_time_coverage_start[b]
+    #            a_time_coverage_end[b] = CDRs[-1].a_time_coverage_end[b]
+    #            a_time_coverage_duration[b] = pd.Timedelta(a_time_coverage_end[b] - a_time_coverage_start[b]).isoformat()
+                
+                #second_of_day_min[b] = np.nanmin([CDRs[i].second_of_day_min[b] for i in range(num_timesteps)], axis=0)
+                second_of_day_min[b] = np.nanmin([CDRs[i].time_ranges[b][0] for i in range(num_timesteps)], axis=0)
+                second_of_day_min[b][np.isnan(second_of_day_min[b])] = 4294967295
+                #second_of_day_max[b] = np.nanmax([CDRs[i].second_of_day_max[b] for i in range(num_timesteps)], axis=0)
+                second_of_day_max[b] = np.nanmax([CDRs[i].time_ranges[b][1] for i in range(num_timesteps)], axis=0)
+                second_of_day_max[b][np.isnan(second_of_day_max[b])] = 4294967295
+                
+                time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
+                
+                notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
+                for t in ['independent', 'structured']:
+                    u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
+                    u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
+                    
+                if instrument == 'MHS' or instrument == 'AMSUB':
+                    u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
+                    u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
+            
+            ret.lon = CDRs[0].lon
+            ret.lat = CDRs[0].lat
+            ret.geospatial_lat_resolution = CDRs[0].geospatial_lat_resolution
+            ret.geospatial_lon_resolution = CDRs[0].geospatial_lon_resolution
+            ret.lat_bnds = np.stack((CDRs[0].lat_bins[0:-1], CDRs[0].lat_bins[1:])).T
+            ret.lon_bnds = np.stack((CDRs[0].lon_bins[0:-1], CDRs[0].lon_bins[1:])).T
+            ret.BT = Tb_mean
+            ret.uth = UTH_mean
+            ret.BT_inhomogeneity = Tb_std
+            ret.uth_inhomogeneity = UTH_std
+            ret.observation_count = count
+            ret.observation_count_all = count_all
+            ret.overpass_count = count_overpasses
+            ret.quality_bitmask = quality_bitmask
+            ret.time_coverage_start = time_coverage_start 
+            ret.time_coverage_end = time_coverage_end
+            ret.time_coverage_duration = time_coverage_duration
+            ret.time_ranges = time_ranges
+            ret.instrument = CDRs[0].instrument
+            ret.satellite = CDRs[0].satellite
+            ret.u_BT = u_Tb
+            ret.u_uth = u_uth
+            ret.source = files
+            ret.is_empty = is_empty
+    
+        else:
+            print('No data in this month.')
+            ret.is_empty = True
+        
         return ret
     
     def toNetCDF(self, CDR_path, comment_on_version):
@@ -342,7 +374,12 @@ class CDR:
         numlats = len(self.lat)
         start_time = self.time_coverage_start
         end_time = self.time_coverage_end
-        CDR_filename = CDRWriter.create_file_name_CDR('UTH', sensor=self.instrument, platform=self.satellite, start=start_time, end=end_time, type='L3', version='1.0')
+        start_time_for_filename = datetime(start_time.year, start_time.month, 
+                                           start_time.day)
+        end_time_for_filename = datetime(start_time.year, start_time.month, 
+                                         monthrange(start_time.year, start_time.month)[1], 
+                                         23, 59, 59)
+        CDR_filename = CDRWriter.create_file_name_CDR('UTH', sensor=self.instrument, platform=self.satellite, start=start_time_for_filename, end=end_time_for_filename, type='L3', version='1.0')
         ds = CDRWriter.createTemplate('UTH', numlons, numlats)
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
@@ -395,7 +432,6 @@ class CDR:
         """
         ret = cls()
         f = Dataset(filename)
-        print(f.source)
         DATE_PATTERN = "%Y%m%d%H%M%S"
         branches = ['ascend', 'descend']
         u_types = ['structured', 'common', 'independent']
@@ -415,7 +451,6 @@ class CDR:
             setattr(ret, attr, getattr(f, attr))
             
         for var in branch_vars:
-            print(var)
             h = {}
             for b in branches:
                 h['{}ing'.format(b)] = f.variables['{}_{}'.format(var, b)][:]
@@ -430,7 +465,6 @@ class CDR:
             setattr(ret, 'u_{}'.format(q), h)
         
         ret.time_ranges = {}
-        print(f.variables['time_ranges_ascending'][0])
         ret.time_ranges['ascending'] = f.variables['time_ranges_ascending']
         ret.time_ranges['descending'] = f.variables['time_ranges_descending']
         ret.time_coverage_start = datetime.strptime(f.time_coverage_start, DATE_PATTERN)

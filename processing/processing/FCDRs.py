@@ -66,7 +66,7 @@ class FCDR:
         # some variables are different in HIRS FCDRs and MW FCDRs:
         if file_info['instrument'] == 'HIRS':
             u_types = ['independent', 'structured'] # this will change in newer FCDR version!!!
-            acquisition_time = f.variables['time'][:].data
+            acquisition_time = f.variables['time'][:]
             ret.quality_mask = np.tile(f.variables['quality_scanline_bitmask'], (numangles, 1)).T
         else:
             u_types = ['independent', 'structured', 'common']
@@ -122,18 +122,18 @@ class FCDR:
                 quality_issue[channel] = f.variables['quality_issue_pixel_Ch{}_bitmask'.format(channel_name)][:, viewing_angles]
         else:
             for channel in channels:
-                brightness_temp[channel] = f.variables['bt'][channel - 1, :, viewing_angles].data
+                brightness_temp[channel] = f.variables['bt'][channel - 1, :, viewing_angles]
+                quality_issue[channel] = np.tile(f.variables['quality_channel_bitmask'][:, channel-1].data, (numangles, 1)).T
                 for t in u_types:
-                    uncertainty[t][channel] = f.variables['u_{}'.format(t)][:, viewing_angles, channel - 1].data
+                    uncertainty[t][channel] = f.variables['u_{}'.format(t)][:, viewing_angles, channel - 1]
 
         # return variables
         ret.brightness_temp = brightness_temp
         ret.u_Tb = {}
         for t in u_types:
             ret.u_Tb[t] = uncertainty[t]
-
-        if file_info['instrument'] == 'MHS' or file_info['instrument'] == 'AMSUB':
-            ret.quality_issue = quality_issue
+            
+        ret.quality_issue = quality_issue
         
         ret.file = filename 
         ret.instrument = ''.join([i for i in file_info['instrument'] if not i.isdigit()])
@@ -193,6 +193,10 @@ class FCDR:
         Reference for microwave sensors: 
             Buehler et al. (2007): A cloud filtering method for microwave 
             upper tropospheric humidity measurements
+            
+        (Reference for HIRS:
+            Shi et al. (2013): HIRS channel 12 brightness temperature dataset 
+            and its correlations with major climate indices)
         """
         viewing_angles = self.viewing_angles
         instrument = self.instrument
@@ -213,7 +217,13 @@ class FCDR:
             cloud_mask = np.array(np.logical_or(Tb18_mask, deltaTb19_mask))
             
         elif instrument == 'HIRS':
+            #Tb8_threshold = 235
+            #delta_Tb8_Tb12_threshold = 25
             Tb12_threshold = 240
+            
+#            cloud_mask = np.logical_or(
+#                    self.brightness_temp[8] <= Tb8_threshold,
+#                    (self.brightness_temp[8] - self.brightness_temp[12]) <= delta_Tb8_Tb12_threshold)
             cloud_mask = self.brightness_temp[12] < Tb12_threshold
         
         self.cloud_mask = cloud_mask
@@ -237,7 +247,9 @@ class FCDR:
                     self.quality_issue[uth_channel] >= 4)
         # HIRS FCDRs do not have a quality issue bitmask per channel
         elif instrument == 'HIRS':
-            quality_and_issue_mask = np.logical_or(self.quality_mask & 1, self.longitude < -180.)
+            quality_and_issue_mask = np.logical_or(
+                    np.logical_or(self.quality_mask & 1, self.longitude < -180.), 
+                    self.quality_issue[uth_channel] > 0)
                 
         self.quality_and_issue_mask = quality_and_issue_mask
   
