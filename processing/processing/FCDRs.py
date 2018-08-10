@@ -70,9 +70,11 @@ class FCDR:
             ret.quality_mask = np.tile(f.variables['quality_scanline_bitmask'], (numangles, 1)).T
         else:
             u_types = ['independent', 'structured', 'common']
-            acquisition_time = f.variables['Time'][:]
+            if isinstance(f.variables['Time'][:], np.ma.MaskedArray):
+                acquisition_time = f.variables['Time'][:].data
+            else:
+                acquisition_time = f.variables['Time'][:]
             ret.quality_mask = f.variables['quality_pixel_bitmask'][:, viewing_angles]
-        
         # for some reason latitudes and longitudes have to be scaled in HIRS FCDRs
         # maybe this will change with newer HIRS FCDR version!
         scale_factor = {}
@@ -126,7 +128,7 @@ class FCDR:
                 quality_issue[channel] = np.tile(f.variables['quality_channel_bitmask'][:, channel-1].data, (numangles, 1)).T
                 for t in u_types:
                     uncertainty[t][channel] = f.variables['u_{}'.format(t)][:, viewing_angles, channel - 1]
-
+        
         # return variables
         ret.brightness_temp = brightness_temp
         ret.u_Tb = {}
