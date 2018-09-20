@@ -63,9 +63,11 @@ class CDR:
         if instrument == 'HIRS':
             uth_channel = 12
             u_types = ['independent', 'structured'] # this will change in newer FCDR format
+            corr_vector = [] # we need this information!!!
         elif instrument == 'MHS' or instrument == 'AMSUB':
             uth_channel = 3
             u_types = ['independent', 'common', 'structured']
+            corr_vector = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
     
         branches = ['ascending', 'descending']
         
@@ -166,10 +168,11 @@ class CDR:
                     
                     # Create a covariance matrix for structured uncertainties:
                     # scanlines of data points in this group
-                    scanlines = np.array(group.scanline)
+                    scanlines = np.array(group.scanline, dtype=np.int)
                     # construct correlation matrix from scanline differences
-                    scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
-                    corr = np.maximum(np.zeros((group_size, group_size)), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
+                    #scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
+                    #corr = np.maximum(np.zeros((group_size, group_size)), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
+                    corr = utils.getCorrMatrix(scanlines, corr_vector)
                     # calculate covariance matrix from correlation matrix
                     S_struct_Tb = np.multiply(corr, np.outer(group_variances_Tb['structured'], group_variances_Tb['structured']))
                     S_struct_uth = np.multiply(corr, np.outer(group_variances_uth['structured'], group_variances_uth['structured']))

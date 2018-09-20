@@ -263,4 +263,32 @@ def getCDRQualityMask(observation_counts, overpass_counts):
     bitmask[observation_counts < 150] = bitmask[observation_counts < 150] + 2
     
     return bitmask
+
+def getCorrMatrix(scanlines, correlation_vector):
+    """ Calculates the correlation matrix for structured uncertainties from the
+    scanline information of all pixels in one grid cell.
+    
+    Parameters:
+        scanlines (array of integers): Scanlines of all pixels in the
+            grid cell
+        correlation_vector (array): Correlation vector containing correlations
+            dependent on scanline differences (first entry: correlation for 
+            pixels in same scanline, second entry: correlation for pixels 1 
+            scanline apart, etc.)
+    """
+    # maximum difference of scanlines that still leads to a correlation
+    max_diff = len(correlation_vector) - 1
+    # when the scanline difference is larger than max_diff, the correlation is 0
+    correlation_vector = np.append(correlation_vector, 0)
+    # calculate scanline differences between all pixels in grid cell
+    scanlines = np.reshape(scanlines, (len(scanlines), 1))
+    scanline_diffs = np.abs(scanlines - scanlines.T)
+    # differences larger than max_diff are set to max_diff + 1
+    scanline_diffs[scanline_diffs > max_diff] = max_diff + 1
+    # scanline differences are used as indices for correlation_vector to get 
+    # the correlations as a function of scanline difference
+    corr_matrix = np.take(correlation_vector, scanline_diffs) 
+    
+    return corr_matrix
+    
     

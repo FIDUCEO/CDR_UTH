@@ -14,7 +14,7 @@ from processing import plots
 import numpy as np
 #%% test: load NetCDF file 
 monthly_mean = None
-monthly_mean = CDRs.CDR.fromNetCDF('CDR_files/MHS/NOAA18/2015/FIDUCEO_CDR_UTH_MHS_NOAA18_20150101000000_20150131235959_L3_v1.0_fv1.1.5.nc')
+monthly_mean = CDRs.CDR.fromNetCDF('FIDUCEO_CDR_UTH_MHS_NOAA18_20070101000000_20070131235959_L3_v1.0_fv1.1.5.nc')#'CDR_files/MHS/NOAA18/2015/FIDUCEO_CDR_UTH_MHS_NOAA18_20150101000000_20150131235959_L3_v1.0_fv1.1.5.nc')
 #%% Plot overview of important CDR variables
 u_types = ['independent', 'structured', 'common']
 b = 'ascending'
@@ -77,7 +77,7 @@ plt.tight_layout(rect=[0, 0.03, 1, 0.95])
 fig, ax = plt.subplots(len(u_types), 1, figsize=(10, 10))
 fig.suptitle(monthly_mean.time_coverage_start.strftime('%Y-%m'))
 for i, t in enumerate(u_types):
-    im = plots.plotTbUncertainty(monthly_mean, t, node=b, ax=ax[i])
+    im = plots.plotTbUncertainty(monthly_mean, t, node=b, ax=ax[i], cmap=plt.get_cmap('Reds', 10))
     ax[i].set_title('{} uncertainties for Tb'.format(t))
     fig.colorbar(im, ax=ax[i])
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -86,7 +86,7 @@ fig, ax = plt.subplots(len(u_types), 1, figsize=(10, 10))
 fig.suptitle(monthly_mean.time_coverage_start.strftime('%Y-%m'))
 for i, t in enumerate(u_types):
     #im = ax[i].pcolormesh(lon, lat, monthly_mean.u_uth[t][b], cmap='Reds')
-    im = plots.plotUTHUncertainty(monthly_mean, t, node=b, ax=ax[i])
+    im = plots.plotUTHUncertainty(monthly_mean, t, node=b, ax=ax[i], cmap=plt.get_cmap('Reds', 10))
     ax[i].set_title('{} uncertainties for UTH'.format(t))
     fig.colorbar(im, ax=ax[i])
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])

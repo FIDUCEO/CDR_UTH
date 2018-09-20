@@ -35,9 +35,9 @@ cdr_path = join('CDR_files', str(instrument.upper()), str(satellite.upper()),
                 str(start_date.year))
 
 if instrument == 'HIRS':
-    viewing_angles = [i for i in range(16, 42)] # or 19-38?
+    viewing_angles = [i for i in range(17, 41)] #+/- 12 around Nadir #center: 28,29
 else:
-    viewing_angles= [i for i in range(29, 61)]
+    viewing_angles= [i for i in range(33, 58)] #+/- 13 around Nadir #center: 45,46
         
 lat_boundaries = [-30, 30]
 lon_boundaries = [-179, 180]
