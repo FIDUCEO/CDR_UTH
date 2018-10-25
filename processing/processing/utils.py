@@ -137,6 +137,9 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
                 # get 3 types of uncertainties
                 for t in u_types:
                     u_Tb[t][b] = np.append(u_Tb[t][b], f.u_Tb[t][uth_channel][np.logical_and(~total_mask, node_mask[b])])
+                    
+                    if np.any(u_Tb[t][b] > 100):
+                        print(files[-1])
                     u_uth[t][b] = np.append(u_uth[t][b], f.u_uth[t][np.logical_and(~total_mask, node_mask[b])])
             
     
@@ -216,10 +219,9 @@ def getSecondOfDay(acquisition_time):
     
         acquisition_time (array): vector containing (e.g. scanline) acquisition times
     """
-    start_time = datetime.datetime.fromtimestamp(acquisition_time[0])
-    midnight = int(datetime.datetime(start_time.year, start_time.month, start_time.day, 0, 0).strftime('%s'))            
+    start_time = datetime.datetime.utcfromtimestamp(acquisition_time[0])
+    midnight = datetime.datetime(start_time.year, start_time.month, start_time.day, 0, 0, tzinfo=datetime.timezone.utc).timestamp()            
     second_of_day = acquisition_time - midnight
-    
     second_of_day[np.where(second_of_day >= 86400)] = second_of_day[np.where(second_of_day >= 86400)] - 86400
     
     return second_of_day
@@ -288,7 +290,7 @@ def getCorrMatrix(scanlines, correlation_vector):
     # scanline differences are used as indices for correlation_vector to get 
     # the correlations as a function of scanline difference
     corr_matrix = np.take(correlation_vector, scanline_diffs) 
-    
+
     return corr_matrix
     
     

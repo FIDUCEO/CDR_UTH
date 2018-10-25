@@ -8,7 +8,6 @@ Created on Fri Jun 22 16:52:03 2018
 import numpy as np
 import os.path
 from netCDF4 import Dataset
-from pyresample import kd_tree, geometry
 import pandas as pd
 from scipy.sparse import csr_matrix, csc_matrix, diags, bmat, block_diag
 import matplotlib.pyplot as plt
@@ -56,6 +55,7 @@ class FCDR:
         
         # get information from file name
         filename = os.path.basename(filename)
+        print(filename)
         file_info = utils.getFileInfo(filename)
         # number of pixels/ viewing angles
         numangles = len(viewing_angles)
@@ -64,17 +64,20 @@ class FCDR:
         latitude = f.variables['latitude'][:, viewing_angles]
         
         # some variables are different in HIRS FCDRs and MW FCDRs:
+
+        u_types = ['independent', 'structured', 'common']
         if file_info['instrument'] == 'HIRS':
-            u_types = ['independent', 'structured'] # this will change in newer FCDR version!!!
-            acquisition_time = f.variables['time'][:]
-            ret.quality_mask = np.tile(f.variables['quality_scanline_bitmask'], (numangles, 1)).T
+            time_attr = 'time'
+            corr_vector = f.variables['cross_line_correlation_coefficients'][:]
         else:
-            u_types = ['independent', 'structured', 'common']
-            if isinstance(f.variables['Time'][:], np.ma.MaskedArray):
-                acquisition_time = f.variables['Time'][:].data
-            else:
-                acquisition_time = f.variables['Time'][:]
-            ret.quality_mask = f.variables['quality_pixel_bitmask'][:, viewing_angles]
+            time_attr = 'Time'
+            corr_vector = []
+        if isinstance(f.variables[time_attr][:], np.ma.MaskedArray):
+            acquisition_time = f.variables[time_attr][:].data
+        else:
+            acquisition_time = f.variables[time_attr][:]
+            
+        ret.quality_mask = f.variables['quality_pixel_bitmask'][:, viewing_angles]
         # for some reason latitudes and longitudes have to be scaled in HIRS FCDRs
         # maybe this will change with newer HIRS FCDR version!
         scale_factor = {}
@@ -131,6 +134,7 @@ class FCDR:
         
         # return variables
         ret.brightness_temp = brightness_temp
+        
         ret.u_Tb = {}
         for t in u_types:
             ret.u_Tb[t] = uncertainty[t]
@@ -147,6 +151,17 @@ class FCDR:
         ret.channels = channels
         ret.second_of_day = second_of_day
         ret.acquisition_time = acquisition_time
+        ret.corr_vector = corr_vector
+        
+#        if ret.start_time.day == 13 or ret.start_time.day == 18:
+#            fig, ax = plt.subplots(2,1, figsize=(12, 10))
+#            im1=ax[0].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['independent'][3], s=0.5, vmin=0, vmax=10)
+#            im2=ax[1].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['structured'][3], s=0.5, vmin=0, vmax=10)
+#            ax[0].set_aspect('auto')
+#            ax[1].set_aspect('auto')
+#            cb = fig.colorbar(im1, ax=ax[0])
+#            cb = fig.colorbar(im2, ax=ax[1])
+#            fig.suptitle(ret.start_time)
         
         return ret
     
@@ -162,12 +177,10 @@ class FCDR:
             uth_channel (numeric): Tb channel used for UTH calculation (default: 3)
         """
         if self.instrument == 'HIRS':
-            u_types = ['independent', 'structured']
             uth_channel = 12
-        else:
-            u_types = ['independent', 'common', 'structured']
+        else:            
             uth_channel = 3
-
+        u_types = ['independent', 'common', 'structured']
         self.uth_channel = uth_channel
         viewing_angles = self.viewing_angles
         brightness_temp = self.brightness_temp[uth_channel].data
@@ -221,7 +234,7 @@ class FCDR:
         elif instrument == 'HIRS':
             #Tb8_threshold = 235
             #delta_Tb8_Tb12_threshold = 25
-            Tb12_threshold = 240
+            Tb12_threshold = 230 #240
             
 #            cloud_mask = np.logical_or(
 #                    self.brightness_temp[8] <= Tb8_threshold,
@@ -247,11 +260,13 @@ class FCDR:
             quality_and_issue_mask = np.logical_or(
                     np.logical_or(self.quality_mask & 1, self.longitude < -180.), 
                     self.quality_issue[uth_channel] >= 4)
-        # HIRS FCDRs do not have a quality issue bitmask per channel
         elif instrument == 'HIRS':
-            quality_and_issue_mask = np.logical_or(
-                    np.logical_or(self.quality_mask & 1, self.longitude < -180.), 
-                    self.quality_issue[uth_channel] > 0)
+            quality_mask = np.logical_or(self.quality_mask & 1, self.longitude < -180.)
+            issue_mask = np.logical_or(
+                    self.quality_issue[uth_channel] & 1, 
+                    np.logical_and(self.quality_issue[uth_channel] >= 4, self.quality_issue[uth_channel] < 16))
+            quality_and_issue_mask = np.logical_or(quality_mask, issue_mask)
+
                 
         self.quality_and_issue_mask = quality_and_issue_mask
   

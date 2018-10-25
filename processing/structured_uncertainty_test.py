@@ -14,16 +14,20 @@ import glob
 from processing.CDRs import CDR
 from processing.FCDRs import FCDR
 
-fcdr_path = '/scratch/uni/u237/users/tlang/UTH/CDRs/FCDRs'
+#fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
+fcdr_path = '/scratch/uni/u237/user_data/tlang/FCDRs/HIRS/'
 
 # time period, instrument, satellite and viewing angles
-start_date = date(2016, 1, 1)
-end_date = date(2016, 1, 31)
-instrument = 'MHS'
-satellite = 'metopb'
-viewing_angles = [i for i in range(29, 61)]
-lat_boundaries=[10, 30]
-lon_boundaries=[0, 20]
+start_date = date(1992, 1, 1)
+end_date = date(1992, 1, 31)
+instrument = 'HIRS' #'HIRS'
+satellite = 'noaa11' #'METOPA'
+viewing_angles = {}
+viewing_angles['AMSUB'] = [i for i in range(33, 58)]
+viewing_angles['MHS'] = [i for i in range(33, 58)]
+viewing_angles['HIRS'] = [i for i in range(17, 41)]
+lat_boundaries=[-30, 30] #[10, 24]
+lon_boundaries=[100, 160] #[0, 14]
 
 # resolution of lat/lon grid:
 resolution = 1.0
@@ -38,13 +42,14 @@ delta = timedelta(days=1)
 while d <= end_date:
     print(d.strftime("%Y-%m-%d"))
     path = join(fcdr_path, satellite.lower(), str(d.year), '{m:02}'.format(m=d.month), '{d:02}'.format(d=d.day))
-    filenames_new = glob.glob(join(path, '*.nc'))
+    filenames_new = glob.glob(join(path, '*0.7.nc'))
     fcdrs = []
     for file in filenames_new:
-        f = FCDR.from_netcdf(
-                 fcdr_path, file, viewing_angles)
-        f.generate_total_mask()
-        f.generate_cloud_mask()
+        #print(file)
+        f = FCDR.fromNetcdf(
+                 fcdr_path, file, viewing_angles[instrument])
+        f.generateTotalMask()
+        f.generateCloudMask()
         fcdrs.append(f)
 
     # gridded daily CDRs
@@ -56,19 +61,19 @@ while d <= end_date:
 
 
  #%%
-for i, c in enumerate(gridded_days):
-    for b in ['ascending', 'descending']:
-        if np.any(~np.isnan(c.brightness_temp_mean[b])):
-            print(i)
-            print(b)
-            print('Tb:')
-            print(c.brightness_temp_mean[b])
-            print('count:')
-            print(c.count[b])
-            print('S_struct:')
-            print(c.S_structured[b].todense())
-            print('S_common:')
-            print(c.S_common[b].todense())
+#for i, c in enumerate(gridded_days):
+#    for b in ['ascending', 'descending']:
+#        if np.any(~np.isnan(c.brightness_temp_mean[b])):
+#            print(i)
+#            print(b)
+#            print('Tb:')
+#            print(c.brightness_temp_mean[b])
+#            print('count:')
+#            print(c.count[b])
+#            print('S_struct:')
+#            print(c.S_structured[b].todense())
+#            print('S_common:')
+#            print(c.S_common[b].todense())
 
 #%%
 print('monthly mean')
@@ -84,12 +89,12 @@ for b in branches:
     #corr_grid[b] = np.zeros((len(monthly_mean.lon_grid), len(monthly_mean.lat_grid)))
 
 e_folding = 1 / np.e
-
-fig, ax = plt.subplots(1, 2)
+plt.rcParams.update({'font.size': 16}) 
+fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 for i, b in enumerate(branches):
     ax[i].set_title(b)
-    im = ax[i].imshow(center_corrs[b], cmap=plt.get_cmap('density', 20))
-    ax[i].contour(center_corrs[b], levels=[e_folding], colors='r')
+    im = ax[i].imshow(center_corrs[b], cmap=plt.get_cmap('density', 10), vmin=0, vmax=1)
+    #ax[i].contour(center_corrs[b], levels=[e_folding], colors='r')
     ax[i].set_yticks([])
     ax[i].set_xticks([])
     ax[i].set_xticks(np.arange(-.5, center_corrs[b].shape[0], 1), minor=True)
@@ -98,7 +103,8 @@ for i, b in enumerate(branches):
 
 fig.subplots_adjust(right=0.8)
 cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
-fig.colorbar(im, cax=cbar_ax)
+cb = fig.colorbar(im, cax=cbar_ax)
+cb.set_label('correlation')
 
     
 #%%
@@ -118,7 +124,7 @@ title = 'gridcells: {}\ninstrument: {}, satellite: {}, month: {},\nnumber of vie
 plt.rcParams.update({'font.size': 13})
 fig, ax = plt.subplots(1, 2, figsize=(20, 10))
 fig.suptitle(title)
-im = ax[0].imshow(monthly_mean.q_struct['ascending'], cmap=plt.get_cmap('density', 10))
+im = ax[0].imshow(monthly_mean.q_struct['ascending'], cmap=plt.get_cmap('density', 10), vmin=0, vmax=1)
 ax[0].set_xticks([])
 #ax[0].set_yticks([])
 ax[0].set_xticks(np.arange(-.5, monthly_mean.q_struct['ascending'].shape[0], 1), minor=True);
@@ -126,7 +132,7 @@ ax[0].set_yticks(np.arange(-.5, monthly_mean.q_struct['ascending'].shape[0], 1),
 #ax[0].grid(which='minor', color='k', linestyle='-', linewidth=0.5)
 ax[0].set_title('S$_{struct}$ ascending')
 
-im = ax[1].imshow(monthly_mean.q_struct['descending'], cmap=plt.get_cmap('density', 10))
+im = ax[1].imshow(monthly_mean.q_struct['descending'], cmap=plt.get_cmap('density', 10), vmin=0, vmax=1)
 ax[1].set_title('S$_{struct}$ descending')
 ax[1].set_xticks([])
 ax[1].set_yticks([])
@@ -137,7 +143,7 @@ ax[1].set_yticks(np.arange(-.5, monthly_mean.q_struct['ascending'].shape[0], 1),
 fig.subplots_adjust(right=0.8)
 cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
 fig.colorbar(im, cax=cbar_ax)
-plt.savefig(join('plots/cov_mat_examples', figurename))
+#plt.savefig(join('plots/cov_mat_examples', figurename))
 
 
 fig, ax = plt.subplots(1, 2, figsize=(8, 6))
@@ -153,6 +159,29 @@ fig.subplots_adjust(right=0.8)
 cbar_ax = fig.add_axes([0.85, 0.15, 0.05, 0.7])
 fig.colorbar(im, cax=cbar_ax)
 
-    
+#%% plot correlation vectors for HIRS and microwave sensors:
+plt.rcParams.update({'font.size': 15})
+corr_vector_mw = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
+x_mw = np.arange(7)
+
+#corr_vector_hirs =
+fig, ax = plt.subplots(1, 2, figsize=(8, 4), sharey=True)
+ax[0].plot(x_mw, corr_vector_mw, 'x', markersize=5, markeredgewidth=2)
+ax[0].set_xlabel('Scanline difference')
+ax[0].set_ylabel('Correlation')
+ax[0].set_ylim(-0.02, 1.02)
+ax[0].set_title('MW')
+
+if instrument == 'HIRS':
+    corr_vector_hirs = f.corr_vector[:,12]
+    x_hirs = np.arange(len(corr_vector_hirs))
+    ax[1].plot(x_hirs, corr_vector_hirs, 'x', markersize=1, markeredgewidth=1)
+    ax[1].set_xlim(0, 230)
+    ax[1].set_xlabel('Scanline difference')
+    ax[1].set_title('HIRS')
+
+plt.tight_layout()
+
+
 
    

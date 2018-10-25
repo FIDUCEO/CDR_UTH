@@ -1,6 +1,9 @@
 __pycache__
 processing/plots
 processing/.ipynb_checkpoints
+processing/CDR_files
 *.nc
 *.pkl
 *.txt
+*.out
+*.err

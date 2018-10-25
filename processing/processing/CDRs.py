@@ -26,21 +26,21 @@ class CDR:
                  time_ranges=None,
                  observation_count=None, observation_count_all=None,
                  overpass_count=None):
-        source = source
-        instrument = instrument
-        satellite = satellite
-        time_coverage_start = time_coverage_start
-        time_coverage_end = time_coverage_end
-        time_ranges = time_ranges
-        lat = lat
-        lon = lon
-        BT = BT
-        uth = uth
-        u_Tb = u_Tb
-        u_uth = u_uth
-        observation_count = observation_count
-        observation_count_all = observation_count_all
-        overpass_count = overpass_count
+        self.source = source
+        self.instrument = instrument
+        self.satellite = satellite
+        self.time_coverage_start = time_coverage_start
+        self.time_coverage_end = time_coverage_end
+        self.time_ranges = time_ranges
+        self.lat = lat
+        self.lon = lon
+        self.BT = BT
+        self.uth = uth
+        self.u_Tb = u_Tb
+        self.u_uth = u_uth
+        self.observation_count = observation_count
+        self.observation_count_all = observation_count_all
+        self.overpass_count = overpass_count
 
     @classmethod
     def GriddedCDRFromFCDRs(cls, FCDRs,
@@ -60,13 +60,12 @@ class CDR:
         t1 = time.clock()
         
         instrument = FCDRs[0].instrument
+        u_types = ['independent', 'common', 'structured']
         if instrument == 'HIRS':
             uth_channel = 12
-            u_types = ['independent', 'structured'] # this will change in newer FCDR format
-            corr_vector = [] # we need this information!!!
+            corr_vector = FCDRs[0].corr_vector[:, uth_channel-1][FCDRs[0].corr_vector[:, uth_channel-1] > 0]
         elif instrument == 'MHS' or instrument == 'AMSUB':
-            uth_channel = 3
-            u_types = ['independent', 'common', 'structured']
+            uth_channel = 3            
             corr_vector = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
     
         branches = ['ascending', 'descending']
@@ -122,7 +121,7 @@ class CDR:
 #            ax.set_xlim(lon_bins[0], lon_bins[-1])
 #            ax.set_ylim(lat_bins[0], lat_bins[-1])
 
-            if data.empty and data_diff.empty:
+            if len(data.index) <= 1 and len(data_diff.index) <= 1:
                 # no overpass in the selected grid
                 print('dataframe is empty!')
                 is_empty = True
@@ -183,9 +182,8 @@ class CDR:
                     u_uth_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_uth['independent'] ** 2)) / group_size
                     # common uncertainty for this grid cell (fully correlated uncertainties --> uncertainty of average is average of uncertainties)
                     # Only MW FCDRs contain common uncertainties
-                    if instrument == 'MHS' or instrument == 'AMSUB':
-                        u_Tb_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
-                        u_uth_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_uth['common'])
+                    u_Tb_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
+                    u_uth_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_uth['common'])
                     # structured uncertainty for this grid cell
                     u_Tb_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb)) / group_size
                     u_uth_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_uth)) / group_size
@@ -201,7 +199,7 @@ class CDR:
 
             time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
             
-        if not data.empty:
+        if not is_empty:
             time_coverage_start  = min(start_time.values())
             time_coverage_end = max(end_time.values())
         
@@ -235,6 +233,7 @@ class CDR:
         ret.u_uth = u_uth_gridded
         t2 = time.clock()
         print(t2 - t1)
+        
         return ret
 
     @classmethod
@@ -253,11 +252,8 @@ class CDR:
         ret = cls()
         
         instrument = CDRs[0].instrument
-        if instrument == 'HIRS':
-            u_types = ['independent', 'structured']
-        elif instrument == 'MHS' or instrument == 'AMSUB':
-            u_types = ['independent', 'structured', 'common']
-        
+        u_types = ['independent', 'structured', 'common']
+
         branches = ['descending', 'ascending']
         num_timesteps = len(CDRs)
         num_lons = len(CDRs[0].lon)
@@ -321,10 +317,9 @@ class CDR:
                 for t in ['independent', 'structured']:
                     u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
                     u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-                    
-                if instrument == 'MHS' or instrument == 'AMSUB':
-                    u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
-                    u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
+
+                u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
+                u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
             
             ret.lon = CDRs[0].lon
             ret.lat = CDRs[0].lat
@@ -357,19 +352,15 @@ class CDR:
         
         return ret
     
-    def toNetCDF(self, CDR_path, comment_on_version):
+    def toNetCDF(self, CDR_path, comment_on_version, overwrite=False):
         """ Saves the attributes of an averaged CDR created by 
         AveragedCDRFromCDRs to a NetCDF file using the CDRWriter by Tom Block.
         
         Parameters:
             comment_on_version (str): Comment on this version of the CDR.
         """
-        instrument = self.instrument
-        if instrument == 'HIRS':
-            u_types = ['structured', 'independent']
-        elif instrument == 'MHS' or instrument == 'AMSUB':
-            u_types = ['structured', 'common', 'independent']
-            
+        instrument = self.instrument            
+        u_types = ['structured', 'common', 'independent']    
         branches = ['ascend', 'descend']
         u_quantities = ['uth', 'BT']
         DATE_PATTERN = "%Y%m%d%H%M%S"
@@ -386,8 +377,10 @@ class CDR:
         ds = CDRWriter.createTemplate('UTH', numlons, numlats)
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
+                       'overpass_count',
                        'uth', 'BT',
-                       'uth_inhomogeneity', 'BT_inhomogeneity']
+                       'uth_inhomogeneity', 'BT_inhomogeneity',
+                       'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',
                         'geospatial_lon_resolution', 'geospatial_lat_resolution']
         
@@ -404,11 +397,13 @@ class CDR:
         for q in u_quantities:
             for t in u_types:
                 for b in branches:
+                    print(q, t, b)
+                    print(getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)].shape)
                     ds.variables['u_{}_{}_{}'.format(t, q, b)].data = getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)]
         
         #im moment noch falsch benannt: time_ranges_ascending, soll später time_ranges_ascend heißen:
-        ds.variables['time_ranges_ascending'].data = getattr(self, 'time_ranges')['ascending']
-        ds.variables['time_ranges_descending'].data = getattr(self, 'time_ranges')['descending']
+#        ds.variables['time_ranges_ascend'].data = getattr(self, 'time_ranges')['ascending']
+#        ds.variables['time_ranges_descend'].data = getattr(self, 'time_ranges')['descending']
 
         ds.attrs['institution'] = 'University of Hamburg'
         ds.attrs['title'] = 'Upper Tropospheric Humidity (UTH)'
@@ -422,8 +417,8 @@ class CDR:
         ds.attrs['comment'] = comment_on_version
         ds.attrs['auxiliary_data'] = ''
         ds.attrs['configuration'] = ''
-        
-        CDRWriter.write(ds, join(CDR_path, CDR_filename))
+        print(overwrite)
+        CDRWriter.write(ds, join(CDR_path, CDR_filename), overwrite=overwrite)
         return ds
     
     @classmethod
@@ -441,8 +436,10 @@ class CDR:
         u_quantities = ['uth', 'BT']
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
+                       'overpass_count',
                        'uth', 'BT',
-                       'uth_inhomogeneity', 'BT_inhomogeneity']
+                       'uth_inhomogeneity', 'BT_inhomogeneity',
+                       'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',
                         'geospatial_lon_resolution', 'geospatial_lat_resolution',
                         'geospatial_lat_units', 'geospatial_lon_units']
@@ -464,12 +461,12 @@ class CDR:
             for t in u_types:
                 h[t] = {}
                 for b in branches:
-                    h[t]['{}ing'.format(b)] = f.variables['u_{}_{}_{}'.format(t, q, b)]
+                    h[t]['{}ing'.format(b)] = f.variables['u_{}_{}_{}'.format(t, q, b)][:]
             setattr(ret, 'u_{}'.format(q), h)
         
-        ret.time_ranges = {}
-        ret.time_ranges['ascending'] = f.variables['time_ranges_ascending']
-        ret.time_ranges['descending'] = f.variables['time_ranges_descending']
+#        ret.time_ranges = {}
+#        ret.time_ranges['ascending'] = f.variables['time_ranges_ascend']
+#        ret.time_ranges['descending'] = f.variables['time_ranges_descend']
         ret.time_coverage_start = datetime.strptime(f.time_coverage_start, DATE_PATTERN)
         ret.time_coverage_end = datetime.strptime(f.time_coverage_end, DATE_PATTERN)
         
@@ -499,6 +496,14 @@ class CDR:
             resolution (float): resolution of lat/lon grid [degree] (default: 1.0)
         """
         ret = cls()
+        instrument = FCDRs[0].instrument
+        if instrument == 'HIRS':
+            uth_channel = 12
+            corr_vector = FCDRs[0].corr_vector[:, uth_channel-1][FCDRs[0].corr_vector[:, uth_channel-1] > 0].data
+        elif instrument == 'MHS' or instrument == 'AMSUB':
+            uth_channel = 3            
+            corr_vector = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
+        
         # latitude and longitude bins and their centers
         lat_bins = np.arange(lat_boundaries[0] - 0.5 * resolution, lat_boundaries[-1] + 0.5 * resolution + 1., resolution)
         lat_centers = [(a + b) / 2 for a, b in zip(lat_bins, lat_bins[1:])]
@@ -549,14 +554,15 @@ class CDR:
 
             # distinguish between ascending and descending node and apply all masks
             for b in branches:
-                latitudes[b] = np.append(latitudes[b], f.latitudes[np.logical_and(~total_mask, node_mask[b])])
-                longitudes[b] = np.append(longitudes[b], f.longitudes[np.logical_and(~total_mask, node_mask[b])])
+                latitudes[b] = np.append(latitudes[b], f.latitude[np.logical_and(~total_mask, node_mask[b])])
+                longitudes[b] = np.append(longitudes[b], f.longitude[np.logical_and(~total_mask, node_mask[b])])
                 brightness_temp[b] = np.append(brightness_temp[b], f.brightness_temp[channel][np.logical_and(~total_mask, node_mask[b])])
                 u_ind[b] = np.append(u_ind[b], f.u_Tb['independent'][channel][np.logical_and(~total_mask, node_mask[b])])
                 u_com[b] = np.append(u_com[b], f.u_Tb['common'][channel][np.logical_and(~total_mask, node_mask[b])])
                 u_struct[b] = np.append(u_struct[b], f.u_Tb['structured'][channel][np.logical_and(~total_mask, node_mask[b])])
                 scanline[b] = np.append(scanline[b], s_max[b] + f.scanline[np.logical_and(~total_mask, node_mask[b])])
-                s_max[b] = np.max(scanline[b])
+                if len(scanline[b]) is not 0:
+                    s_max[b] = np.max(scanline[b])
             
         for b in branches:
             longitudes[b][longitudes[b] < -180 + 0.5 * resolution] = 180.
@@ -651,10 +657,15 @@ class CDR:
                     # compose covariance matrix with structured uncertainties
                     print('S_struct')
                     
-                    scanlines = np.array(data[b].scanline)
+                    scanlines = np.array(data[b].scanline, dtype=np.int)
                     # construct correlation matrix from scanline differences
                     scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
-                    corr = np.maximum(np.zeros((len(scanlines), len(scanlines))), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
+
+                    # construct correlation matrix from scanline differences
+                    #scanlines_h = np.reshape(scanlines, (len(scanlines), 1))
+                    #corr = np.maximum(np.zeros((group_size, group_size)), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
+                    corr = utils.getCorrMatrix(scanlines_h, corr_vector)
+                    #corr = np.maximum(np.zeros((len(scanlines), len(scanlines))), 1 - np.abs(scanlines_h - scanlines_h.T) / 8)
 
                     # calculate covariance matrix from correlation matrix
                     S_struct = csr_matrix(np.multiply(corr, np.outer(data[b].U_struct, data[b].U_struct)))
@@ -666,10 +677,9 @@ class CDR:
                     # create auxiliary matrix E
                     print('E')
                     E = csr_matrix((E_values, (E_rows, E_columns)), shape=(numcells, numel))
-                    print(E.todense())
                     
 #                    ax[1, 0].imshow(E.todense())
-#                    ax[1, 1].imshow(S_struct.todense())
+#                    ax[1, 1].imshow(S_struct.todense(), aspect='auto')
 #                    fig.suptitle(b)
     
                     print('matrix multiplication')
@@ -752,6 +762,7 @@ class CDR:
                     S_ind_total = block_diag((S_ind_mean[b], S_ind_new))
                     
                     if np.any(S_struct_total.todense() < 0):
+                        print('S_struct elements < 0')
                         print(S_struct_total)
                                                                  
                     # Create auxiliary matrix E:
@@ -781,10 +792,12 @@ class CDR:
                     # of uncertainties
                     S_struct_mean[b] = E.dot(S_struct_total.dot(E.T))
                     #if np.any(S_struct_mean[b].todense() < 0):
-                    print(S_struct_mean[b])
                     norm = np.sqrt(S_struct_mean[b].diagonal())
                     norm_matrix = np.outer(norm, norm)
                     q_struct_mean[b] = S_struct_mean[b] / norm_matrix
+                    print(q_struct_mean[b])
+                    if np.any(q_struct_mean[b] < 0):
+                        print('q_struct elements < 0')
                     S_com_mean[b] = E.dot(S_com_total.dot(E.T))
                     S_ind_mean[b] = E.dot(S_ind_total.dot(E.T))
                     
