@@ -19,18 +19,22 @@ version_comment = 'Second test version for own use.'
 # True, if existing CDR files with the same name should be overwritten
 overwrite = True
 # specifiy instruments, satellites, start and end year of the mission
-instruments = ['MHS']
+instruments = ['AMSUB']
 satellites = dict.fromkeys(instruments)
-satellites['MHS'] = ['Noaa18']
-#satellites['AMSUB'] = ['Noaa17']
+#satellites['MHS'] = ['Noaa18']
+satellites['AMSUB'] = ['Noaa15', 'Noaa16']
 start_year = {i: {} for i in instruments}
 end_year = {i: {} for i in instruments}
 #start_year['MHS']['Metopb'] = 2013
 #end_year['MHS']['Metopb'] = 2017
-start_year['MHS']['Noaa18'] = 2007
-end_year['MHS']['Noaa18'] = 2017
+#start_year['MHS']['Noaa18'] = 2007
+#end_year['MHS']['Noaa18'] = 2017
 #start_year['AMSUB']['Noaa17'] = 2002
 #end_year['AMSUB']['Noaa17'] = 2013
+start_year['AMSUB']['Noaa15'] = 2003
+end_year['AMSUB']['Noaa15'] = 2003
+start_year['AMSUB']['Noaa16'] = 2003
+end_year['AMSUB']['Noaa16'] = 2003
 
 for i in instruments:
     for s in satellites[i]:

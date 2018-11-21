@@ -32,14 +32,13 @@ year = int(sys.argv[3])
 version_comment = sys.argv[4]
 overwrite = bool(sys.argv[5])
 
-print(overwrite)
-
 fcdr_path='/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/'
 regr_params_path='/scratch/uni/u237/users/tlang/UTH/radiative_transfer/uth_definition'
-cdr_path='/scratch/uni/u237/users/tlang/CDR/CDR_UTH/processing/CDR_files'
+regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(instrument.lower()) #'regr_params_old_definition_amsu.xml'
+cdr_path='/scratch/uni/u237/users/tlang/CDR/CDR_UTH/processing/CDR_files'#'/scratch/uni/u237/users/tlang/CDR/CDR_UTH/processing/CDR_files_old_definition'
 
-start_date = datetime.datetime(year=year, month=1, day=1)
-end_date = datetime.datetime(year=year, month=12, day=31)
+start_date = datetime.date(year=year, month=1, day=1)
+end_date = datetime.date(year=year, month=12, day=31)
 cdr_fullpath = join(cdr_path, str(instrument.upper()), str(satellite.upper()), 
                 str(start_date.year))
 #cdr_path = '.'
@@ -58,12 +57,11 @@ lon_boundaries = [-179, 180]
 # resolution of lat/lon grid
 resolution = 1.0
 
-regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(instrument.lower())
 regr_slopes, regr_intercepts = utils.regression_params_from_xml(join(regr_params_path, regr_params_file))
 
 date = start_date
 day_delta = datetime.timedelta(days=1)
-last_day_of_month = datetime.datetime(start_date.year, start_date.month, monthrange(start_date.year, start_date.month)[1])
+last_day_of_month = datetime.date(start_date.year, start_date.month, monthrange(start_date.year, start_date.month)[1])
 
 while date <= end_date:
     print(date.month)

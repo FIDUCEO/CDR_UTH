@@ -80,8 +80,10 @@ class CDR:
         group_variances_uth = dict.fromkeys(u_types)
         # dictionaries for gridded fields that will be returned
         Tb_gridded = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
+        Tb_unfiltered_gridded = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
         UTH_gridded = {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches}
         u_Tb_gridded = {t: {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches} for t in u_types}
+        u_Tb_unfiltered_gridded = {t: {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches} for t in u_types}
         u_uth_gridded = {t: {b: np.ones((len(lat_centers), len(lon_centers))) * np.nan for b in branches} for t in u_types}
         count = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
         count_all = {b: np.zeros((len(lat_centers), len(lon_centers))) for b in branches}
@@ -96,7 +98,7 @@ class CDR:
         is_empty = False
  
         # collect data from all FCDRs
-        collected_data, collected_data_diff, collected_files = utils.collectFCDRData(
+        collected_data, collected_data_unfiltered, collected_files = utils.collectFCDRData(
                 FCDRs, u_types, uth_channel=uth_channel)
 
         for b in branches:
@@ -105,16 +107,20 @@ class CDR:
 #            longitudes_all[b][longitudes_all[b] == -180] = 180.
             #TODO: stimmt das so???
             collected_data['longitude'][b][collected_data['longitude'][b] < -180 + 0.5 * resolution] = 180.
-            collected_data_diff['longitude'][b][collected_data_diff['longitude'][b] < -180 + 0.5 * resolution] = 180.
+            collected_data_unfiltered['longitude'][b][collected_data_unfiltered['longitude'][b] < -180 + 0.5 * resolution] = 180.
+#            collected_data_diff['longitude'][b][collected_data_diff['longitude'][b] < -180 + 0.5 * resolution] = 180.
             # combine all values of this branch in a pandas dataframe
             data = pd.DataFrame(utils.flattenDict(collected_data, b))
-            data_diff = pd.DataFrame(utils.flattenDict(collected_data_diff, b))
+            data_unfiltered = pd.DataFrame(utils.flattenDict(collected_data_unfiltered, b))
+#            data_diff = pd.DataFrame(utils.flattenDict(collected_data_diff, b))
             
             # throw away data outside the specified new grid
             data = data[np.logical_and((data['latitude'] <= lat_bins[-1]),(data['latitude'] > lat_bins[0]))].reset_index()
             data = data[np.logical_and((data['longitude'] <= lon_bins[-1]),(data['longitude'] > lon_bins[0]))].reset_index()
-            data_diff = data_diff[np.logical_and((data_diff['latitude'] <= lat_bins[-1]),(data_diff['latitude'] > lat_bins[0]))].reset_index()
-            data_diff = data_diff[np.logical_and((data_diff['longitude'] <= lon_bins[-1]),(data_diff['longitude'] > lon_bins[0]))].reset_index()
+            data_unfiltered = data_unfiltered[np.logical_and((data_unfiltered['latitude'] <= lat_bins[-1]),(data_unfiltered['latitude'] > lat_bins[0]))].reset_index()
+            data_unfiltered = data_unfiltered[np.logical_and((data_unfiltered['longitude'] <= lon_bins[-1]),(data_unfiltered['longitude'] > lon_bins[0]))].reset_index()
+#            data_diff = data_diff[np.logical_and((data_diff['latitude'] <= lat_bins[-1]),(data_diff['latitude'] > lat_bins[0]))].reset_index()
+#            data_diff = data_diff[np.logical_and((data_diff['longitude'] <= lon_bins[-1]),(data_diff['longitude'] > lon_bins[0]))].reset_index()
 #            fig, ax = plt.subplots()
 #            ax.set_title(b)
 #            ax.scatter(data.longitude, data.latitude, c=data.brightness_temp, s=1)
@@ -129,12 +135,15 @@ class CDR:
                 # bin data to latitude and longitude bins
                 data = utils.binData(
                         data, lat_bins, lon_bins, lat_centers, lon_centers)
-                data_diff = utils.binData(
-                        data_diff, lat_bins, lon_bins, lat_centers, lon_centers)
+                data_unfiltered = utils.binData(
+                        data_unfiltered, lat_bins, lon_bins, lat_centers, lon_centers)
+#                data_diff = utils.binData(
+#                        data_diff, lat_bins, lon_bins, lat_centers, lon_centers)
                                 
                 # group data by latitude and longitude bins
                 data_grouped = data.groupby([data.lat_bin, data.lon_bin], sort=False)
-                data_diff_grouped = data_diff.groupby([data_diff.lat_bin, data_diff.lon_bin], sort=False)
+                data_unfiltered_grouped = data_unfiltered.groupby([data_unfiltered.lat_bin, data_unfiltered.lon_bin], sort=False)
+                #data_diff_grouped = data_diff.groupby([data_diff.lat_bin, data_diff.lon_bin], sort=False)
                 
                 # get time of first and last data point going into this CDR
                 start_time[b] = datetime.fromtimestamp(np.min(data.acquisition_time))
@@ -153,7 +162,7 @@ class CDR:
 
                     # put count 
                     count[b][lat_ind, lon_ind] = group_size
-                    count_all[b][lat_ind, lon_ind] = group_size
+                    #count_all[b][lat_ind, lon_ind] = group_size
                     count_overpasses[b][lat_ind, lon_ind] += 1
                     second_of_day_group = np.array(group.second_of_day)#second_of_day_grouped[(lat_ind, lon_ind)]
                     second_of_day_min[b][lat_ind, lon_ind] = np.min(second_of_day_group)
@@ -188,15 +197,31 @@ class CDR:
                     u_Tb_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb)) / group_size
                     u_uth_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_uth)) / group_size
                 
-                # go through all groups that would contain additional data without cloud filtering:
-                for name, group in data_diff_grouped:
+                # go through data that is not cloud filtered:
+                for name, group in data_unfiltered_grouped:
                     lat_ind = name[0]
                     lon_ind = name[1]
                     group_size = len(group)
-                    count_all[b][lat_ind, lon_ind] += group_size
+                    count_all[b][lat_ind, lon_ind] = group_size
                     
-                
-
+                    Tb_unfiltered_gridded[b][lat_ind, lon_ind] = group.brightness_temp.mean()
+                    for t in u_types:
+                        group_variances_Tb[t] = np.array(group['u_Tb_{}'.format(t)])
+                    
+                    scanlines = np.array(group.scanline, dtype=np.int)
+                    corr = utils.getCorrMatrix(scanlines, corr_vector)
+                    S_struct_Tb_unfiltered = np.multiply(corr, np.outer(group_variances_Tb['structured'], group_variances_Tb['structured']))
+                    u_Tb_unfiltered_gridded['independent'][b][lat_ind, lon_ind] = np.sqrt(np.sum(group_variances_Tb['independent'] ** 2)) / group_size
+                    u_Tb_unfiltered_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
+                    u_Tb_unfiltered_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb_unfiltered)) / group_size
+                                    
+#                # go through all groups that would contain additional data without cloud filtering:
+#                for name, group in data_diff_grouped:
+#                    lat_ind = name[0]
+#                    lon_ind = name[1]
+#                    group_size = len(group)
+#                    #count_all[b][lat_ind, lon_ind] += group_size
+                    
             time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
             
         if not is_empty:
@@ -214,6 +239,7 @@ class CDR:
         ret.geospatial_lon_resolution = resolution
         # BT, UTH and observation counts
         ret.BT = Tb_gridded
+        ret.BT_full = Tb_unfiltered_gridded
         ret.uth = UTH_gridded
         ret.observation_count = count
         ret.observation_count_all = count_all
@@ -230,6 +256,7 @@ class CDR:
         ret.satellite = FCDRs[0].satellite
         # uncertainties
         ret.u_Tb = u_Tb_gridded
+        ret.u_Tb_full = u_Tb_unfiltered_gridded
         ret.u_uth = u_uth_gridded
         t2 = time.clock()
         print(t2 - t1)
@@ -259,8 +286,10 @@ class CDR:
         num_lons = len(CDRs[0].lon)
         num_lats = len(CDRs[0].lat)
         Tb_mean = dict.fromkeys(branches)
+        Tb_full_mean = dict.fromkeys(branches)
         UTH_mean = dict.fromkeys(branches)
         u_Tb = {t: dict.fromkeys(branches) for t in u_types}
+        u_Tb_full = {t: dict.fromkeys(branches) for t in u_types}
         u_uth = {t: dict.fromkeys(branches) for t in u_types}
         Tb_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
         UTH_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
@@ -287,6 +316,7 @@ class CDR:
                     files.extend(CDRs[i].source)
                 notnan_count = np.sum([~np.isnan(CDRs[i].BT[b]) for i in range(num_timesteps)], axis=0)
                 Tb_mean[b] = np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0)
+                Tb_full_mean[b] = np.nanmean([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0)
                 UTH_mean[b] = np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) 
                 #Tb_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].BT[b][notnan_count > 1] - Tb_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
                 #UTH_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].uth[b][notnan_count > 1] - UTH_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
@@ -314,11 +344,14 @@ class CDR:
                 time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
                 
                 notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
+                notnan_count_full = np.sum([~np.isnan(CDRs[i].u_Tb_full['independent'][b]) for i in range(num_timesteps)], axis=0)
                 for t in ['independent', 'structured']:
                     u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
+                    u_Tb_full[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb_full[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count_full
                     u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
 
                 u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
+                u_Tb_full['common'][b] = np.nanmean([CDRs[i].u_Tb_full['common'][b] for i in range(num_timesteps)], axis=0)
                 u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
             
             ret.lon = CDRs[0].lon
@@ -328,6 +361,7 @@ class CDR:
             ret.lat_bnds = np.stack((CDRs[0].lat_bins[0:-1], CDRs[0].lat_bins[1:])).T
             ret.lon_bnds = np.stack((CDRs[0].lon_bins[0:-1], CDRs[0].lon_bins[1:])).T
             ret.BT = Tb_mean
+            ret.BT_full = Tb_full_mean
             ret.uth = UTH_mean
             ret.BT_inhomogeneity = Tb_std
             ret.uth_inhomogeneity = UTH_std
@@ -342,6 +376,7 @@ class CDR:
             ret.instrument = CDRs[0].instrument
             ret.satellite = CDRs[0].satellite
             ret.u_BT = u_Tb
+            ret.u_BT_full = u_Tb_full
             ret.u_uth = u_uth
             ret.source = files
             ret.is_empty = is_empty
@@ -397,8 +432,6 @@ class CDR:
         for q in u_quantities:
             for t in u_types:
                 for b in branches:
-                    print(q, t, b)
-                    print(getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)].shape)
                     ds.variables['u_{}_{}_{}'.format(t, q, b)].data = getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)]
         
         #im moment noch falsch benannt: time_ranges_ascending, soll später time_ranges_ascend heißen:

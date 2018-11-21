@@ -14,7 +14,7 @@ from processing import plots
 import numpy as np
 #%% test: load NetCDF file 
 monthly_mean = None
-monthly_mean = CDRs.CDR.fromNetCDF('CDR_files/HIRS/METOPA/2016/FIDUCEO_CDR_UTH_HIRS_METOPA_20160101000000_20160131235959_L3_v1.0_fv2.0.0.nc')
+monthly_mean = CDRs.CDR.fromNetCDF('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/processing/CDR_files/HIRS/NOAA11/1992/FIDUCEO_CDR_UTH_HIRS_NOAA11_19920101000000_19920131235959_L3_v1.0_fv2.0.0.nc')
 #%% Plot overview of important CDR variables
 u_types = ['independent', 'structured', 'common']
 b = 'ascending'
@@ -35,7 +35,7 @@ ax[0].set_xticklabels(xticklabels)
 ax[0].set_yticks(yticklocs)
 ax[0].set_yticklabels(yticklabels)
 fig.colorbar(im, ax=ax[0])
-im = plots.plotUTH(monthly_mean, b, ax=ax[1], cmap=plt.get_cmap('speed', 20), vmin=0, vmax=100)
+im = plots.plotUTH(monthly_mean, b, ax=ax[1], cmap=plt.get_cmap('speed', 20), vmin=0, vmax=120)
 ax[1].set_title('UTH')
 ax[1].set_xlabel('Longitude')
 ax[1].set_ylabel('Latitude')
@@ -86,7 +86,7 @@ fig, ax = plt.subplots(len(u_types), 1, figsize=(10, 10))
 fig.suptitle(monthly_mean.time_coverage_start.strftime('%Y-%m'))
 for i, t in enumerate(u_types):
     #im = ax[i].pcolormesh(lon, lat, monthly_mean.u_uth[t][b], cmap='Reds')
-    im = plots.plotUTHUncertainty(monthly_mean, t, node=b, ax=ax[i], cmap=plt.get_cmap('Reds', 10), vmin=0, vmax=10)
+    im = plots.plotUTHUncertainty(monthly_mean, t, node=b, ax=ax[i], cmap=plt.get_cmap('Reds', 10))
     ax[i].set_title('{} uncertainties for UTH'.format(t))
     fig.colorbar(im, ax=ax[i])
 plt.tight_layout(rect=[0, 0.03, 1, 0.95])
@@ -133,8 +133,8 @@ ax[1].set_xticklabels(xticklabels)
 ax[1].set_yticks(yticklocs)
 ax[1].set_yticklabels(yticklabels)
 fig.colorbar(im, ax=ax[1])
-im = plots.plotCountAll(monthly_mean, node=b, ax=ax[2], cmap=plt.get_cmap('density', 20), vmin=0)
-ax[2].set_title('Observation count')
+im = plots.plotOverpassCount(monthly_mean, node=b, ax=ax[2], cmap=plt.get_cmap('density', 20), vmin=0)
+ax[2].set_title('Overpass count')
 ax[2].set_xlabel('Longitude')
 ax[2].set_ylabel('Latitude')
 ax[2].set_xticks(xticklocs)

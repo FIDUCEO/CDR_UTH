@@ -93,6 +93,27 @@ def plotCountAll(CDR, node, ax=None, **kwargs):
         
     return ax.pcolormesh(lon, lat, CDR.observation_count_all[node], **default_kwargs, **kwargs)
 
+def plotOverpassCount(CDR, node, ax=None, **kwargs):
+    """ plot overpass count field of a CDR object.
+    parameters:
+        CDR: CDR-object
+        node (string): 'ascending' or 'descending' (satellite branch)
+        ax(AxesSubplot, optional): Axes to plot in
+        **kwargs: Additional keyword arguments
+    """
+    
+    if ax is None:
+        ax = plt.gca()
+    
+    default_kwargs = {}    
+    if 'cmap' not in kwargs:
+        default_kwargs = {
+                'cmap': plt.get_cmap('density', 20)}
+    
+    lon, lat = np.meshgrid(CDR.lon, CDR.lat)
+        
+    return ax.pcolormesh(lon, lat, CDR.overpass_count[node], **default_kwargs, **kwargs)
+
 def plotTbUncertainty(CDR, uncertainty_type, node, ax=None, **kwargs):
     """ plot brightness temperature uncertainty field of a CDR object.
     parameters:

@@ -55,7 +55,6 @@ class FCDR:
         
         # get information from file name
         filename = os.path.basename(filename)
-        print(filename)
         file_info = utils.getFileInfo(filename)
         # number of pixels/ viewing angles
         numangles = len(viewing_angles)
@@ -64,7 +63,6 @@ class FCDR:
         latitude = f.variables['latitude'][:, viewing_angles]
         
         # some variables are different in HIRS FCDRs and MW FCDRs:
-
         u_types = ['independent', 'structured', 'common']
         if file_info['instrument'] == 'HIRS':
             time_attr = 'time'
@@ -154,14 +152,14 @@ class FCDR:
         ret.corr_vector = corr_vector
         
 #        if ret.start_time.day == 13 or ret.start_time.day == 18:
-#            fig, ax = plt.subplots(2,1, figsize=(12, 10))
-#            im1=ax[0].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['independent'][3], s=0.5, vmin=0, vmax=10)
-#            im2=ax[1].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['structured'][3], s=0.5, vmin=0, vmax=10)
-#            ax[0].set_aspect('auto')
-#            ax[1].set_aspect('auto')
-#            cb = fig.colorbar(im1, ax=ax[0])
-#            cb = fig.colorbar(im2, ax=ax[1])
-#            fig.suptitle(ret.start_time)
+#        fig, ax = plt.subplots(2,1, figsize=(12, 10))
+#        im1=ax[0].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['common'][3], s=0.5, vmin=0, vmax=10)
+#       # im2=ax[1].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['structured'][3], s=0.5, vmin=0, vmax=10)
+#        ax[0].set_aspect('auto')
+#        ax[1].set_aspect('auto')
+#        cb = fig.colorbar(im1, ax=ax[0])
+#        cb = fig.colorbar(im2, ax=ax[1])
+#        fig.suptitle(ret.start_time)
         
         return ret
     
@@ -234,7 +232,7 @@ class FCDR:
         elif instrument == 'HIRS':
             #Tb8_threshold = 235
             #delta_Tb8_Tb12_threshold = 25
-            Tb12_threshold = 230 #240
+            Tb12_threshold = 240
             
 #            cloud_mask = np.logical_or(
 #                    self.brightness_temp[8] <= Tb8_threshold,
@@ -253,18 +251,22 @@ class FCDR:
         else:
             uth_channel = 3
         quality_and_issue_mask = {}
-        
+        # total mask is combination of cloud mask, general quality mask
+        # and quality issue mask of the UTH channel
         if instrument == 'AMSUB' or instrument == 'MHS':
-            # total mask is combination of cloud mask, general quality mask
-            # and quality issue mask of the UTH channel
+
             quality_and_issue_mask = np.logical_or(
                     np.logical_or(self.quality_mask & 1, self.longitude < -180.), 
                     self.quality_issue[uth_channel] >= 4)
         elif instrument == 'HIRS':
             quality_mask = np.logical_or(self.quality_mask & 1, self.longitude < -180.)
+            # do not use pixel that have the following flags set in the channel
+            # specific mask:
+            # do_not_use (bit 1), uncertainty_suspicious (bit 2),
+            # self_emission_fails (bit 3), calibration_impossible (bit 4)
             issue_mask = np.logical_or(
                     self.quality_issue[uth_channel] & 1, 
-                    np.logical_and(self.quality_issue[uth_channel] >= 4, self.quality_issue[uth_channel] < 16))
+                    np.logical_and(self.quality_issue[uth_channel] >= 2, self.quality_issue[uth_channel] < 16))
             quality_and_issue_mask = np.logical_or(quality_mask, issue_mask)
 
                 

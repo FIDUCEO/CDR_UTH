@@ -89,16 +89,22 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
     files = []
     latitude = {b: np.array([], dtype=np.float16) for b in branches}
     longitude = {b: np.array([], dtype=np.float16) for b in branches}
+    latitude_unfiltered = {b: np.array([], dtype=np.float16) for b in branches}
+    longitude_unfiltered = {b: np.array([], dtype=np.float16) for b in branches}
     brightness_temp = {b: np.array([]) for b in branches}
+    brightness_temp_unfiltered = {b: np.array([]) for b in branches} 
     uth = {b: np.array([]) for b in branches}
     u_Tb = {t: {b: np.array([]) for b in branches} for t in u_types}
+    u_Tb_unfiltered = {t: {b: np.array([]) for b in branches} for t in u_types}
     u_uth = {t: {b: np.array([]) for b in branches} for t in u_types}
     scanline = {b: np.array([]) for b in branches}
     scanline_max = {b: 0 for b in branches}
+    scanline_unfiltered = {b: np.array([]) for b in branches}
+    scanline_max_unfiltered = {b: 0 for b in branches}
     second_of_day = {b: np.array([]) for b in branches} 
     acquisition_time = {b: np.array([]) for b in branches} 
-    latitude_diff = {b: np.array([], dtype=np.float16) for b in branches}
-    longitude_diff = {b: np.array([], dtype=np.float16) for b in branches}
+#    latitude_diff = {b: np.array([], dtype=np.float16) for b in branches}
+#    longitude_diff = {b: np.array([], dtype=np.float16) for b in branches}
     
     node_mask = {}
     for f in FCDRs:
@@ -117,29 +123,32 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
         node_mask['descending'] = ~f.node_mask
         total_mask = f.total_mask
         quality_and_issue_mask = f.quality_and_issue_mask
-        diff_mask = np.logical_and(np.logical_not(quality_and_issue_mask), total_mask)
+#        diff_mask = np.logical_and(np.logical_not(quality_and_issue_mask), total_mask)
 
         # distinguish between ascending and descending node and apply all masks
         for b in branches: 
             if f.latitude[np.logical_and(~total_mask, node_mask[b])].size:
                 latitude[b] = np.append(latitude[b], f.latitude[np.logical_and(~total_mask, node_mask[b])])
                 longitude[b] = np.append(longitude[b], f.longitude[np.logical_and(~total_mask, node_mask[b])])
+                latitude_unfiltered[b] = np.append(latitude_unfiltered[b], f.latitude[np.logical_and(~quality_and_issue_mask, node_mask[b])])
+                longitude_unfiltered[b] = np.append(longitude_unfiltered[b], f.longitude[np.logical_and(~quality_and_issue_mask, node_mask[b])])
                 brightness_temp[b] = np.append(brightness_temp[b], f.brightness_temp[uth_channel][np.logical_and(~total_mask, node_mask[b])])
+                brightness_temp_unfiltered[b] = np.append(brightness_temp_unfiltered[b], f.brightness_temp[uth_channel][np.logical_and(~quality_and_issue_mask, node_mask[b])])
                 uth[b] = np.append(uth[b], f.uth[np.logical_and(~total_mask, node_mask[b])])
                 second_of_day[b] = np.append(second_of_day[b], f.second_of_day[np.logical_and(~total_mask, node_mask[b])])
                 acquisition_time[b] = np.append(acquisition_time[b], f.acquisition_time[np.logical_and(~total_mask, node_mask[b])])
-                latitude_diff[b] = np.append(latitude_diff[b], f.latitude[np.logical_and(node_mask[b], diff_mask)])
-                longitude_diff[b] = np.append(longitude_diff[b], f.longitude[np.logical_and(node_mask[b], diff_mask)])
+#                latitude_diff[b] = np.append(latitude_diff[b], f.latitude[np.logical_and(node_mask[b], diff_mask)])
+#                longitude_diff[b] = np.append(longitude_diff[b], f.longitude[np.logical_and(node_mask[b], diff_mask)])
                 
                 # scanline information (needed for structured uncertainties)
                 scanline[b] = np.append(scanline[b], scanline_max[b] + f.scanline[np.logical_and(~total_mask, node_mask[b])])
+                scanline_unfiltered[b] = np.append(scanline_unfiltered[b], scanline_max_unfiltered[b] + f.scanline[np.logical_and(~quality_and_issue_mask, node_mask[b])])
                 scanline_max[b] = np.max(scanline[b])
+                scanline_max_unfiltered[b] = np.max(scanline_unfiltered[b])
                 # get 3 types of uncertainties
                 for t in u_types:
                     u_Tb[t][b] = np.append(u_Tb[t][b], f.u_Tb[t][uth_channel][np.logical_and(~total_mask, node_mask[b])])
-                    
-                    if np.any(u_Tb[t][b] > 100):
-                        print(files[-1])
+                    u_Tb_unfiltered[t][b] = np.append(u_Tb_unfiltered[t][b], f.u_Tb[t][uth_channel][np.logical_and(~quality_and_issue_mask, node_mask[b])])
                     u_uth[t][b] = np.append(u_uth[t][b], f.u_uth[t][np.logical_and(~total_mask, node_mask[b])])
             
     
@@ -150,17 +159,24 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
     collected_data['uth'] = uth
     collected_data['second_of_day'] = second_of_day
     collected_data['acquisition_time'] = acquisition_time
-    collected_data['scanline'] = scanline
-    
+    collected_data['scanline'] = scanline    
     for t in u_types:
         collected_data['u_Tb_{}'.format(t)] = u_Tb[t]
         collected_data['u_uth_{}'.format(t)] = u_uth[t]
     
-    collected_data_diff = {}
-    collected_data_diff['latitude'] = latitude_diff
-    collected_data_diff['longitude'] = longitude_diff
+    collected_data_unfiltered = {}
+    collected_data_unfiltered['latitude'] = latitude_unfiltered
+    collected_data_unfiltered['longitude'] = longitude_unfiltered
+    collected_data_unfiltered['brightness_temp'] = brightness_temp_unfiltered 
+    collected_data_unfiltered['scanline'] = scanline_unfiltered
+    for t in u_types:
+        collected_data_unfiltered['u_Tb_{}'.format(t)] = u_Tb_unfiltered[t]
     
-    return collected_data, collected_data_diff, files
+#    collected_data_diff = {}
+#    collected_data_diff['latitude'] = latitude_diff
+#    collected_data_diff['longitude'] = longitude_diff
+    
+    return collected_data, collected_data_unfiltered, files
 
 def binData(data, lat_bins, lon_bins, lat_centers, lon_centers):
     """ Bins data in the dataframe data (which contains the attributes 
