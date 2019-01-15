@@ -19,11 +19,11 @@ import glob
 import processing.CDRs as CDRs
 import processing.FCDRs as FCDRs
 
-def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
+def create_CDRs(instrument, satellite, start_date, end_date, version, version_comment,
                 fcdr_path='/scratch/uni/u237/user_data/ihans/FCDR/easy/v2_0fv1_1_4/',
                 regr_params_path='/scratch/uni/u237/users/tlang/UTH/radiative_transfer/uth_definition',
                 regr_params_file='regr_params_from_fitted_thres_amsu.xml',
-                cdr_path='/scratch/uni/u237/users/tlang/CDR/CDR_UTH/processing/CDR_files',
+                cdr_path='/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files',
                 overwrite=False):
 
     """ Processes all monthly CDRs for the specified instrument on the specified
@@ -34,6 +34,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
         satellite (str): satellite name (e.g. 'MetopA', 'Noaa18')
         start_date (datetime.datetime object): start of processing time period
         end_date (datetime.datetime object): end of processing time period
+        version (str): CDR version (for filename, e.g. 2_0)
         version comment (str): comment on this version of CDRs
         fcdr_path (str): full path to FCDRs (optional)
         regr_params_path (str): full path to UTH regression parameters (optional)
@@ -52,8 +53,10 @@ def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
     
     if instrument == 'HIRS':
         viewing_angles = [i for i in range(17, 41)] #+/- 12 around Nadir #center: 28,29
+    elif instrument == 'SSMT2':
+        viewing_angles = [i for i in range(9, 19)] # +/- 5 around Nadir #center: 13,14
     else:
-        viewing_angles= [i for i in range(33, 58)] #+/- 13 around Nadir #center: 45,46
+        viewing_angles = [i for i in range(33, 58)] #+/- 13 around Nadir #center: 45,46
             
     lat_boundaries = [-30, 30]
     lon_boundaries = [-179, 180]
@@ -75,6 +78,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
             print(date.strftime("%Y-%m-%d"))
             path = join(fcdr_path, satellite.lower(), str(date.year), '{m:02}'.format(m=date.month), '{d:02}'.format(d=date.day))
             filenames_new = glob.glob(join(path, '*.nc'))
+            print(path)
             fcdrs = []
             
             if filenames_new:
@@ -95,7 +99,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
             monthly_mean = CDRs.CDR.AveragedCDRFromCDRs(gridded_days)
         # write to NetCDF
             if not monthly_mean.is_empty:
-                ds = monthly_mean.toNetCDF(cdr_fullpath, comment_on_version=version_comment, overwrite=overwrite)
+                ds = monthly_mean.toNetCDF(cdr_fullpath, version, comment_on_version=version_comment, overwrite=overwrite)
     #    # save with pickle
     #    outfile = 'CDR_{}_{}_{}.pkl'.format(monthly_mean.time_coverage_start.strftime('%Y-%m'), monthly_mean.instrument, monthly_mean.satellite)
     #    with open(outfile, 'wb') as output:
@@ -109,33 +113,31 @@ def create_CDRs(instrument, satellite, start_date, end_date, version_comment,
 
 
 if __name__ == '__main__':
-    instruments = ['HIRS']
+    instruments = ['SSMT2']
     satellites = dict.fromkeys(instruments)
 #    satellites['MHS'] = ['Noaa18']
-#    satellites['AMSUB'] = ['Noaa17']
-    satellites['HIRS'] = ['Noaa11']
+#    satellites['AMSUB'] = ['Noaa19']
+#    satellites['HIRS'] = ['Noaa11']
+    satellites['SSMT2'] = ['f12']
     start_date = {i: {} for i in instruments}
     end_date = {i: {} for i in instruments}
 #    start_date['MHS']['Metopb'] = datetime.date(2013, 2, 1)
 #    end_date['MHS']['Metopb'] = datetime.date(2017, 10, 31)
-#    start_date['MHS']['Noaa18'] = datetime.date(2005, 6, 1)
-#    end_date['MHS']['Noaa18'] = datetime.date(2017, 11, 30)    
-#    start_date['AMSUB']['Noaa17'] = datetime.date(2002, 1, 1)
-#    end_date['AMSUB']['Noaa17'] = datetime.date(2013, 12, 31)
-#    start_date['MHS']['Noaa18'] = datetime.date(2016, 5, 18)
-#    end_date['MHS']['Noaa18'] = datetime.date(2016, 5, 18)
-#    start_date['HIRS']['MetopA'] = datetime.date(2016, 1, 1)
-#    end_date['HIRS']['MetopA'] = datetime.date(2016, 1, 31)
-    start_date['HIRS']['Noaa11'] = datetime.date(1992, 1, 1)
-    end_date['HIRS']['Noaa11'] = datetime.date(1992, 1, 31)
+#    start_date['MHS']['Noaa18'] = datetime.date(2012, 7, 1)
+#    end_date['MHS']['Noaa18'] = datetime.date(2012, 7, 31)    
+#    start_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 1)
+#    end_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 2)
+    start_date['SSMT2']['f12'] = datetime.date(1997, 7, 1)
+    end_date['SSMT2']['f12'] = datetime.date(1997, 8, 1)
     
     for i in instruments:
         regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(i.lower())
         for s in satellites[i]:
             create_CDRs(instrument=i, satellite=s, start_date=start_date[i][s],
-                        end_date=end_date[i][s], version_comment='Test run for own use', 
-                        overwrite=False, regr_params_file=regr_params_file,
-                        fcdr_path='/scratch/uni/u237/user_data/tlang/FCDRs/HIRS/')
+                        end_date=end_date[i][s], version='0_0', version_comment='Test run for own use',
+                        cdr_path='../CDR_files/Test/',
+                        overwrite=True, regr_params_file=regr_params_file,
+                        fcdr_path='/scratch/uni/u237/user_data/ihans/FCDR/easy/v4_1fv2_0_1/')
 #            create_CDRs_year(instrument=i, satellite=s, year=2016, version_comment='Test', 
 #                             cdr_path='.', overwrite=False)
         

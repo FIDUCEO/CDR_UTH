@@ -67,6 +67,8 @@ def getFileInfo(filename):
     
     file_info = {}
     file_info['instrument'] = ''.join([i for i in info[3].upper() if not i.isdigit()])
+    if file_info['instrument'] == 'SSMT':
+        file_info['instrument'] = 'SSMT2'
     file_info['satellite'] = info[4].upper()
     start_time_str = info[5]
     end_time_str = info[6]
@@ -266,8 +268,8 @@ def getCDRQualityMask(observation_counts, overpass_counts):
     """ Creates a quality bitmask for the monthly mean CDR based on observation
     and overpass counts.
     
-    Bit 1 is set to 1, if there are less than 6 overpasses in a grid cell
-    Bit 2 is set to 1, if there are less than 150 observations in a grid cell
+    Bit 2 is set to 1 (=use with caution), if there are less than 6 overpasses 
+    in a grid cell there are less than 150 observations in a grid cell
     
     Parameters:
         observation_counts: number of pixels that were used to retrieve UTH
@@ -277,7 +279,7 @@ def getCDRQualityMask(observation_counts, overpass_counts):
     """
     bitmask = np.zeros(observation_counts.shape)
     
-    bitmask[overpass_counts < 6] = bitmask[overpass_counts < 6] + 1
+    bitmask[overpass_counts < 6] = bitmask[overpass_counts < 6] + 2
     bitmask[observation_counts < 150] = bitmask[observation_counts < 150] + 2
     
     return bitmask

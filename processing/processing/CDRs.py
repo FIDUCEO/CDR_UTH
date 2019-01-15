@@ -7,7 +7,8 @@ Created on Fri May  4 10:04:57 2018
 """
 import numpy as np
 import pandas as pd
-from os.path import join
+from os.path import join, exists
+from os import makedirs
 from scipy.sparse import csr_matrix, csc_matrix, diags, bmat, block_diag
 import matplotlib.pyplot as plt 
 import time
@@ -57,16 +58,17 @@ class CDR:
             lon_boundaries (list): lower and upper boundary for longitude-grid
             resolution (float): resolution of lat/lon grid [degree] (default: 1.0)
         """
-        t1 = time.clock()
+        #t1 = time.clock()
         
         instrument = FCDRs[0].instrument
         u_types = ['independent', 'common', 'structured']
         if instrument == 'HIRS':
             uth_channel = 12
-            corr_vector = FCDRs[0].corr_vector[:, uth_channel-1][FCDRs[0].corr_vector[:, uth_channel-1] > 0]
-        elif instrument == 'MHS' or instrument == 'AMSUB':
+            corr_vector = FCDRs[0].corr_vector[uth_channel][FCDRs[0].corr_vector[uth_channel] > 0]
+        elif instrument in ['MHS', 'AMSUB', 'SSMT2']:
             uth_channel = 3            
-            corr_vector = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
+            #corr_vector = [1.0, 0.8465, 0.5134, 0.2231, 0.0695, 0.0155, 0.0025]
+            corr_vector = FCDRs[0].corr_vector[uth_channel]
     
         branches = ['ascending', 'descending']
         
@@ -102,10 +104,9 @@ class CDR:
                 FCDRs, u_types, uth_channel=uth_channel)
 
         for b in branches:
-            print(b)
+#            print(b)
 #            longitudes[b][longitudes[b] == -180] = 180.
 #            longitudes_all[b][longitudes_all[b] == -180] = 180.
-            #TODO: stimmt das so???
             collected_data['longitude'][b][collected_data['longitude'][b] < -180 + 0.5 * resolution] = 180.
             collected_data_unfiltered['longitude'][b][collected_data_unfiltered['longitude'][b] < -180 + 0.5 * resolution] = 180.
 #            collected_data_diff['longitude'][b][collected_data_diff['longitude'][b] < -180 + 0.5 * resolution] = 180.
@@ -127,7 +128,7 @@ class CDR:
 #            ax.set_xlim(lon_bins[0], lon_bins[-1])
 #            ax.set_ylim(lat_bins[0], lat_bins[-1])
 
-            if len(data.index) <= 1 and len(data_diff.index) <= 1:
+            if len(data.index) <= 1 and len(data_unfiltered.index) <=1:
                 # no overpass in the selected grid
                 print('dataframe is empty!')
                 is_empty = True
@@ -258,8 +259,8 @@ class CDR:
         ret.u_Tb = u_Tb_gridded
         ret.u_Tb_full = u_Tb_unfiltered_gridded
         ret.u_uth = u_uth_gridded
-        t2 = time.clock()
-        print(t2 - t1)
+        #t2 = time.clock()
+        #print(t2 - t1)
         
         return ret
 
@@ -278,7 +279,6 @@ class CDR:
         """
         ret = cls()
         
-        instrument = CDRs[0].instrument
         u_types = ['independent', 'structured', 'common']
 
         branches = ['descending', 'ascending']
@@ -315,34 +315,29 @@ class CDR:
                 for i in range(num_timesteps):
                     files.extend(CDRs[i].source)
                 notnan_count = np.sum([~np.isnan(CDRs[i].BT[b]) for i in range(num_timesteps)], axis=0)
-                Tb_mean[b] = np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0)
-                Tb_full_mean[b] = np.nanmean([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0)
-                UTH_mean[b] = np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) 
-                #Tb_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].BT[b][notnan_count > 1] - Tb_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
-                #UTH_std[b][notnan_count > 1] = np.sqrt(np.sum([(CDRs[i].uth[b][notnan_count > 1] - UTH_mean[b][notnan_count > 1]) ** 2 for i in range(num_timesteps)], axis=0) / (notnan_count[notnan_count > 1] - 1))
+                Tb_mean[b] = np.around(np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0), 2)
+                Tb_full_mean[b] = np.around(np.nanmean([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0), 2)
+                UTH_mean[b] = np.around(np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) , 2)
+
                 Tb_std[b] = np.nanstd([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0, ddof=1)
                 UTH_std[b] = np.nanstd([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0, ddof=1)
+                # add counts
                 count[b] = np.nansum([CDRs[i].observation_count[b] for i in range(num_timesteps)], axis=0)
                 count[b][count[b] == 0] = -32767
                 count_all[b] = np.nansum([CDRs[i].observation_count_all[b] for i in range(num_timesteps)], axis=0)
                 count_all[b][count_all[b] == 0] = -32767
                 count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)
-                # set new quality flags based on counts
-                quality_bitmask[b] = utils.getCDRQualityMask(count[b], count_overpasses[b])
+                # setting new quality flags based on counts - not possible yet
+                # quality_bitmask[b] = utils.getCDRQualityMask(count[b], count_overpasses[b])                
                 
-    #            a_time_coverage_start[b] = CDRs[0].a_time_coverage_start[b]
-    #            a_time_coverage_end[b] = CDRs[-1].a_time_coverage_end[b]
-    #            a_time_coverage_duration[b] = pd.Timedelta(a_time_coverage_end[b] - a_time_coverage_start[b]).isoformat()
-                
-                #second_of_day_min[b] = np.nanmin([CDRs[i].second_of_day_min[b] for i in range(num_timesteps)], axis=0)
+                # combine time ranges
                 second_of_day_min[b] = np.nanmin([CDRs[i].time_ranges[b][0] for i in range(num_timesteps)], axis=0)
                 second_of_day_min[b][np.isnan(second_of_day_min[b])] = 4294967295
-                #second_of_day_max[b] = np.nanmax([CDRs[i].second_of_day_max[b] for i in range(num_timesteps)], axis=0)
                 second_of_day_max[b] = np.nanmax([CDRs[i].time_ranges[b][1] for i in range(num_timesteps)], axis=0)
                 second_of_day_max[b][np.isnan(second_of_day_max[b])] = 4294967295
-                
                 time_ranges[b] = np.stack((second_of_day_min[b], second_of_day_max[b]))
                 
+                # combine uncertainties
                 notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
                 notnan_count_full = np.sum([~np.isnan(CDRs[i].u_Tb_full['independent'][b]) for i in range(num_timesteps)], axis=0)
                 for t in ['independent', 'structured']:
@@ -353,7 +348,16 @@ class CDR:
                 u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
                 u_Tb_full['common'][b] = np.nanmean([CDRs[i].u_Tb_full['common'][b] for i in range(num_timesteps)], axis=0)
                 u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
+                # round uncertainties to 4 digits:
+                numdigits = 4
+                for t in u_types:
+                    u_Tb[t][b] = np.around(u_Tb[t][b], numdigits)
+                    u_Tb_full[t][b] = np.around(u_Tb_full[t][b], numdigits)
+                    u_uth[t][b] = np.around(u_uth[t][b], numdigits)
             
+            # fill quality bitmask with fill values
+            quality_bitmask = np.zeros((num_lons, num_lats)) 
+            # return data
             ret.lon = CDRs[0].lon
             ret.lat = CDRs[0].lat
             ret.geospatial_lat_resolution = CDRs[0].geospatial_lat_resolution
@@ -368,7 +372,7 @@ class CDR:
             ret.observation_count = count
             ret.observation_count_all = count_all
             ret.overpass_count = count_overpasses
-            ret.quality_bitmask = quality_bitmask
+            ret.quality_pixel_bitmask = quality_bitmask
             ret.time_coverage_start = time_coverage_start 
             ret.time_coverage_end = time_coverage_end
             ret.time_coverage_duration = time_coverage_duration
@@ -387,38 +391,43 @@ class CDR:
         
         return ret
     
-    def toNetCDF(self, CDR_path, comment_on_version, overwrite=False):
+    def toNetCDF(self, CDR_path, version, comment_on_version, overwrite=False):
         """ Saves the attributes of an averaged CDR created by 
         AveragedCDRFromCDRs to a NetCDF file using the CDRWriter by Tom Block.
         
         Parameters:
+            CDR_path (str): path to directory where CDRs are saved
+            version (str): Version of this CDR (for CDR filename)
             comment_on_version (str): Comment on this version of the CDR.
         """
-        instrument = self.instrument            
+           
         u_types = ['structured', 'common', 'independent']    
         branches = ['ascend', 'descend']
-        u_quantities = ['uth', 'BT']
+        u_quantities = ['uth', 'BT', 'BT_full']
         DATE_PATTERN = "%Y%m%d%H%M%S"
         numlons = len(self.lon)
         numlats = len(self.lat)
         start_time = self.time_coverage_start
         end_time = self.time_coverage_end
         start_time_for_filename = datetime(start_time.year, start_time.month, 
-                                           start_time.day)
+                                           1, 0, 0, 0)
         end_time_for_filename = datetime(start_time.year, start_time.month, 
                                          monthrange(start_time.year, start_time.month)[1], 
                                          23, 59, 59)
-        CDR_filename = CDRWriter.create_file_name_CDR('UTH', sensor=self.instrument, platform=self.satellite, start=start_time_for_filename, end=end_time_for_filename, type='L3', version='1.0')
+        CDR_filename = CDRWriter.create_file_name_CDR('UTH', sensor=self.instrument, platform=self.satellite, start=start_time_for_filename, end=end_time_for_filename, type='L3', version=version)
+        # create directory for CDRs if it does not exist
+        if not exists(CDR_path):
+            makedirs(CDR_path)
+        
         ds = CDRWriter.createTemplate('UTH', numlons, numlats)
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
                        'overpass_count',
-                       'uth', 'BT',
+                       'uth', 'BT', 'BT_full',
                        'uth_inhomogeneity', 'BT_inhomogeneity',
                        'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',
                         'geospatial_lon_resolution', 'geospatial_lat_resolution']
-        
         for var in simple_vars:
             ds.variables[var].data = getattr(self, var)
         
@@ -433,10 +442,6 @@ class CDR:
             for t in u_types:
                 for b in branches:
                     ds.variables['u_{}_{}_{}'.format(t, q, b)].data = getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)]
-        
-        #im moment noch falsch benannt: time_ranges_ascending, soll später time_ranges_ascend heißen:
-#        ds.variables['time_ranges_ascend'].data = getattr(self, 'time_ranges')['ascending']
-#        ds.variables['time_ranges_descend'].data = getattr(self, 'time_ranges')['descending']
 
         ds.attrs['institution'] = 'University of Hamburg'
         ds.attrs['title'] = 'Upper Tropospheric Humidity (UTH)'
@@ -450,9 +455,14 @@ class CDR:
         ds.attrs['comment'] = comment_on_version
         ds.attrs['auxiliary_data'] = ''
         ds.attrs['configuration'] = ''
-        print(overwrite)
         CDRWriter.write(ds, join(CDR_path, CDR_filename), overwrite=overwrite)
-        return ds
+        
+        print('CDR {} for {} on {} saved as {}'.format(
+                start_time.strftime('%Y/%m'),
+                self.instrument,
+                self.satellite,
+                CDR_filename
+                ))
     
     @classmethod
     def fromNetCDF(cls, filename):
@@ -466,11 +476,11 @@ class CDR:
         DATE_PATTERN = "%Y%m%d%H%M%S"
         branches = ['ascend', 'descend']
         u_types = ['structured', 'common', 'independent']
-        u_quantities = ['uth', 'BT']
+        u_quantities = ['uth', 'BT', 'BT_full']
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
                        'overpass_count',
-                       'uth', 'BT',
+                       'uth', 'BT', 'BT_full',
                        'uth_inhomogeneity', 'BT_inhomogeneity',
                        'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',

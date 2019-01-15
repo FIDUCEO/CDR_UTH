@@ -66,10 +66,8 @@ class FCDR:
         u_types = ['independent', 'structured', 'common']
         if file_info['instrument'] == 'HIRS':
             time_attr = 'time'
-            corr_vector = f.variables['cross_line_correlation_coefficients'][:]
         else:
             time_attr = 'Time'
-            corr_vector = []
         if isinstance(f.variables[time_attr][:], np.ma.MaskedArray):
             acquisition_time = f.variables[time_attr][:].data
         else:
@@ -82,6 +80,7 @@ class FCDR:
         scale_factor['HIRS'] = 0.001 
         scale_factor['AMSUB'] = 1
         scale_factor['MHS'] = 1
+        scale_factor['SSMT2'] = 1
         
         # longitudes and latitudes can be either masked arrays or not
         if isinstance(longitude, np.ma.MaskedArray):
@@ -106,6 +105,7 @@ class FCDR:
         brightness_temp = {}
         uncertainty = {t: {} for t in u_types}
         quality_issue = {}
+        corr_vector = {}
         
         channels = np.arange(1, f.dimensions['channel'].size + 1)
         
@@ -114,19 +114,24 @@ class FCDR:
             channel_names = ['1', '2', '3', '4', '5']
         elif file_info['instrument'] == 'AMSUB':
             channel_names = ['16', '17', '18', '19', '20']
+        elif file_info['instrument'] == 'SSMT2':
+            channel_names = ['4', '5', '2', '1', '3']
         
-        # extract brightness temperatures and uncertainties
-        if file_info['instrument'] == 'MHS' or file_info['instrument'] == 'AMSUB':
+        # extract brightness temperatures, uncertainties and correlation vectors
+        if file_info['instrument'] in ['MHS', 'AMSUB', 'SSMT2']:
             for channel, channel_name in zip(channels, channel_names):
-                brightness_temp[channel] = f.variables['Ch{}_BT'.format(channel_name)][:, viewing_angles]
-                uncertainty['common'][channel] = f.variables['u_common_Ch{}_BT'.format(channel_name)][:, viewing_angles]
-                uncertainty['structured'][channel] = f.variables['u_structured_Ch{}_BT'.format(channel_name)][:, viewing_angles]
-                uncertainty['independent'][channel] = f.variables['u_independent_Ch{}_BT'.format(channel_name)][:, viewing_angles].data
+                brightness_temp[channel] = f.variables['Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
+                uncertainty['common'][channel] = f.variables['u_common_Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
+                uncertainty['structured'][channel] = f.variables['u_structured_Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
+                uncertainty['independent'][channel] = f.variables['u_independent_Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
                 quality_issue[channel] = f.variables['quality_issue_pixel_Ch{}_bitmask'.format(channel_name)][:, viewing_angles]
+                #corr_vector[channel] = f.variables['cross_line_correlation_coefficients'][:, channel-1]
+                corr_vector[channel] = []
         else:
             for channel in channels:
                 brightness_temp[channel] = f.variables['bt'][channel - 1, :, viewing_angles]
                 quality_issue[channel] = np.tile(f.variables['quality_channel_bitmask'][:, channel-1].data, (numangles, 1)).T
+                corr_vector[channel] = f.variables['cross_line_correlation_coefficients'][:, channel-1]
                 for t in u_types:
                     uncertainty[t][channel] = f.variables['u_{}'.format(t)][:, viewing_angles, channel - 1]
         
@@ -140,7 +145,7 @@ class FCDR:
         ret.quality_issue = quality_issue
         
         ret.file = filename 
-        ret.instrument = ''.join([i for i in file_info['instrument'] if not i.isdigit()])
+        ret.instrument = ''.join([i for i in file_info['instrument']])
         ret.satellite = file_info['satellite']
         ret.start_time = file_info['start_time']
         ret.end_time = file_info['end_time']
@@ -214,14 +219,18 @@ class FCDR:
         viewing_angles = self.viewing_angles
         instrument = self.instrument
         
-        if instrument == 'AMSUB' or instrument == 'MHS':
-            # brightness temperature thresholds for AMSU-B channel 18 (here: channel 3)
-            Tb18_thresholds = [233.3, 233.9, 234.4, 234.9, 235.2, 235.5, 235.8, 236.1, 236.4,
-                               236.6, 236.7, 237.0, 237.2, 237.4, 237.6, 237.8, 238.0, 238.2,
-                               238.3, 238.5, 238.6, 238.7, 238.8, 239.0, 239.1, 239.2, 239.2,
-                               239.3, 239.4, 239.5, 239.6, 239.6, 239.8, 239.8, 239.9, 239.9,
-                               239.9, 239.9, 240.1, 240.1, 240.1, 240.1, 240.1, 240.1, 240.1]
-            
+        # brightness temperature thresholds for AMSU-B channel 18 (here: channel 3)
+        Tb18_thresholds = [233.3, 233.9, 234.4, 234.9, 235.2, 235.5, 235.8, 236.1, 236.4,
+                           236.6, 236.7, 237.0, 237.2, 237.4, 237.6, 237.8, 238.0, 238.2,
+                           238.3, 238.5, 238.6, 238.7, 238.8, 239.0, 239.1, 239.2, 239.2,
+                           239.3, 239.4, 239.5, 239.6, 239.6, 239.8, 239.8, 239.9, 239.9,
+                           239.9, 239.9, 240.1, 240.1, 240.1, 240.1, 240.1, 240.1, 240.1]
+        
+        # SSMT2 has fewer viewing angles. Use values from nearest angles of AMSU-B
+        if instrument == 'SSMT2':
+            Tb18_thresholds = [Tb18_thresholds[i] for i in [8, 10, 13, 16, 19, 21, 24, 27, 29, 32, 35, 38, 40, 43]]
+        
+        if instrument in ['MHS', 'AMSUB', 'SSMT2']:
             # clouds are there, if either the Tb of channel 18 is smaller than a threshold, or...
             Tb18_mask = self.brightness_temp[3] < np.hstack((Tb18_thresholds, Tb18_thresholds[::-1]))[viewing_angles]
             # ... the Tb in channel 19 is smaller than the Tb in channel 18
@@ -253,11 +262,11 @@ class FCDR:
         quality_and_issue_mask = {}
         # total mask is combination of cloud mask, general quality mask
         # and quality issue mask of the UTH channel
-        if instrument == 'AMSUB' or instrument == 'MHS':
-
+        nanmask = np.isnan(self.brightness_temp[uth_channel])
+        if instrument in ['AMSUB', 'MHS', 'SSMT2']:
             quality_and_issue_mask = np.logical_or(
                     np.logical_or(self.quality_mask & 1, self.longitude < -180.), 
-                    self.quality_issue[uth_channel] >= 4)
+                    np.logical_or(self.quality_issue[uth_channel] >= 4, nanmask))
         elif instrument == 'HIRS':
             quality_mask = np.logical_or(self.quality_mask & 1, self.longitude < -180.)
             # do not use pixel that have the following flags set in the channel

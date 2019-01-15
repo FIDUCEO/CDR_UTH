@@ -8,6 +8,7 @@ Created on Fri Jul  6 10:19:45 2018
 import numpy as np
 import matplotlib.pyplot as plt
 import typhon
+from mpl_toolkits.basemap import Basemap
 
 def plotUTH(CDR, node, ax=None, **kwargs):
     """ plot UTH field of a CDR object.
@@ -169,8 +170,16 @@ def plotCDRQuantity(CDR_quantity, latitudes, longitudes, ax=None, **kwargs):
         ax = plt.gca()
     
     lon, lat = np.meshgrid(longitudes, latitudes)
+    ma = Basemap(projection='mill',lon_0=0, llcrnrlat=-30, urcrnrlat=30,
+            llcrnrlon=-180, urcrnrlon=180, ax=ax)
+    # plot coastlines, draw label meridians and parallels.
+    ma.drawcoastlines()
+    labels_meridians=[0,0,0,1]
+    labels_parallels = [1,0,0,0]    
+    ma.drawparallels(np.arange(ma.latmin, ma.latmax, 15), labels=labels_parallels, fontsize=11)
+    ma.drawmeridians(np.arange(ma.lonmin,ma.lonmax,60),labels=labels_meridians, fontsize=11)
         
-    return ax.pcolormesh(lon, lat, CDR_quantity, **kwargs)
+    return ma.pcolormesh(lon, lat, CDR_quantity, latlon=True, **kwargs)
 
 def plotOverview(CDR, node, **kwargs):
     """ Plots an overview of the CDR-object containing brightness temperature,
