@@ -19,7 +19,7 @@ import processing.CDRs as CDRs
 import processing.FCDRs as FCDRs
 
 def create_CDRs(instrument, satellite, start_date, end_date, version, version_comment,
-                fcdr_path, cdr_path, regr_params_path, regr_params_file, overwrite=False):
+                fcdr_path, cdr_path, regr_params_path, overwrite=False):
     """ Processes all monthly CDRs for the specified instrument on the specified
     satellite in the time period from start_date to end_date.
     
@@ -31,7 +31,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
         version (str): CDR version (for filename, e.g. 2_0)
         version comment (str): comment on this version of CDRs
         fcdr_path (str): full path to FCDRs
-                cdr_path (str): full path to CDR output directory 
+        cdr_path (str): full path to CDR output directory 
         regr_params_path (str): full path to UTH regression parameters 
         overwrite (boolean): if True, existing CDR files are overwritten, if False
             the processing ends with an error message, if a CDR file already exists.
@@ -59,7 +59,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
     resolution = 1.0
     
     #regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(instrument.lower())
-    regr_slopes, regr_intercepts = utils.regression_params_from_xml(join(regr_params_path, regr_params_file))
+    regr_slopes, regr_intercepts = utils.regression_params_from_xml(regr_params_path)
     
     date = start_date
     day_delta = datetime.timedelta(days=1)
@@ -103,6 +103,12 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
 
 
 if __name__ == '__main__':
+    
+    cdr_path = '../CDR_files/Test/'
+    fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v4_1fv2_0_1/'
+    version='0_0'
+    version_comment = 'Test run for own use'
+    
     instruments = ['SSMT2']
     satellites = dict.fromkeys(instruments)
 #    satellites['MHS'] = ['Noaa18']
@@ -121,16 +127,17 @@ if __name__ == '__main__':
     end_date['SSMT2']['f12'] = datetime.date(1997, 8, 1)
     
     for i in instruments:
-        regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(i.lower())
+        regr_params_file = 'regression_parameters/regr_params_{}.xml'.format(i.lower())
         for s in satellites[i]:
             create_CDRs(
                     instrument=i, 
                     satellite=s, 
                     start_date=start_date[i][s],
                     end_date=end_date[i][s], 
-                    version='0_0', 
-                    version_comment='Test run for own use',
-                    fcdr_path='/scratch/uni/u237/user_data/ihans/FCDR/easy/v4_1fv2_0_1/',
-                    cdr_path='../CDR_files/Test/',
-                    overwrite=True, regr_params_file=regr_params_file
+                    version=version, 
+                    version_comment=version_comment,
+                    fcdr_path=fcdr_path,
+                    cdr_path=cdr_path,
+                    regr_params_path=regr_params_file,
+                    overwrite=True, 
                     )

@@ -38,8 +38,8 @@ overwrite = bool(sys.argv[8])
 
 # ---------------------------SCALING COEFFICIENTS ------------------------- #
 # location and names of files containing the UTH scaling coefficients:
-regr_params_path = '/scratch/uni/u237/users/tlang/UTH/radiative_transfer/uth_definition'
-regr_params_file = 'regr_params_from_fitted_thres_{}.xml'.format(instrument.lower()) #'regr_params_old_definition_amsu.xml'
+regr_params_path = 'regression_parameters'
+regr_params_file = 'regr_params_{}.xml'.format(instrument.lower()) #'regr_params_old_definition_amsu.xml'
 # read scaling coefficients
 regr_slopes, regr_intercepts = utils.regression_params_from_xml(
         join(regr_params_path, regr_params_file)
