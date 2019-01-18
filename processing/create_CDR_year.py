@@ -5,14 +5,19 @@ Created on Fri Oct 12 13:21:09 2018
 
 @author:Theresa Lang
 
-Creates one year of CDRs.
-This script is meant to be run from the command line. The following parameters
-have to be specified in the call:
+Creates one year of CDRs. Is meant to be called with run_batch_missions.py or
+to be run from the command line. The following calling parameters
+have to be specified after the program call:
     1. instrument: instrument
     2. satellite: satellite/platform carriing the instrument
     3. year: year of data to be processed
-    4. version comment: a comment on the version of the CDR
-    5. overwrite: 1 if existing CDR files should be overwritten. 
+    4. version: CDR version (e.g. '1_0')
+    5. version comment: a comment on the version of the CDR 
+        (individual words must be connected by an underscore, 
+        e.g. 'first_test_version_0.0')
+    6. fcdr_path: full path to fcdr files
+    7. cdr_path: path to save CDRs
+    7. overwrite: 1 if existing CDR files should be overwritten. 
 """
 import sys
 import numpy as np
