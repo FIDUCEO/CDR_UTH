@@ -15,6 +15,8 @@ import datetime
 import processing.utils as utils
 
 class FCDR:
+    """ An FCDR object contains the data from one FCDR file (one satellite
+    orbit), which is needed for the creation of a UTH CDR. """
     def __init__(self, latitude=None, longitude=None, viewing_angles=None,
                  brightness_temp=None, channels=None, scanline=None, quality_mask=None, 
                  u_Tb=None, u_uth=None, quality_issue=None, start_time=None, 
@@ -38,10 +40,9 @@ class FCDR:
         self.satellite = satellite
         self.uth = uth
     
-    #TODO: adapt to new HIRS FCDR format
     @classmethod    
     def fromNetcdf(cls, fcdr_path, filename, viewing_angles):
-        """ Read FCDR from NetCDF file.
+        """ Create FCDR from a FIDUCEO FCDR in NetCDF format.
         
         Parameters:
             fcdr_path (str): path to directory with NetCDF file
@@ -75,7 +76,7 @@ class FCDR:
             
         ret.quality_mask = f.variables['quality_pixel_bitmask'][:, viewing_angles]
         # for some reason latitudes and longitudes have to be scaled in HIRS FCDRs
-        # maybe this will change with newer HIRS FCDR version!
+        #TODO: check whether this will change with newer HIRS FCDR version!
         scale_factor = {}
         scale_factor['HIRS'] = 0.001 
         scale_factor['AMSUB'] = 1
@@ -156,16 +157,6 @@ class FCDR:
         ret.acquisition_time = acquisition_time
         ret.corr_vector = corr_vector
         
-#        if ret.start_time.day == 13 or ret.start_time.day == 18:
-#        fig, ax = plt.subplots(2,1, figsize=(12, 10))
-#        im1=ax[0].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['common'][3], s=0.5, vmin=0, vmax=10)
-#       # im2=ax[1].scatter(ret.longitude, ret.latitude, c=ret.u_Tb['structured'][3], s=0.5, vmin=0, vmax=10)
-#        ax[0].set_aspect('auto')
-#        ax[1].set_aspect('auto')
-#        cb = fig.colorbar(im1, ax=ax[0])
-#        cb = fig.colorbar(im2, ax=ax[1])
-#        fig.suptitle(ret.start_time)
-        
         return ret
     
     def calcUTH(self, slope_params, intercept_params):
@@ -206,15 +197,14 @@ class FCDR:
         self.u_uth = u_uth
         
     def generateCloudMask(self):
-        #TODO: thresholds are only valid for AMSU-B so far
         """ Find pixels that are contaminated with clouds.
         Reference for microwave sensors: 
             Buehler et al. (2007): A cloud filtering method for microwave 
             upper tropospheric humidity measurements
             
-        (Reference for HIRS:
-            Shi et al. (2013): HIRS channel 12 brightness temperature dataset 
-            and its correlations with major climate indices)
+        For HIRS a simple threshold is used for the ch12 brightness temperature
+        so far.
+            
         """
         viewing_angles = self.viewing_angles
         instrument = self.instrument
@@ -228,7 +218,8 @@ class FCDR:
         
         # SSMT2 has fewer viewing angles. Use values from nearest angles of AMSU-B
         if instrument == 'SSMT2':
-            Tb18_thresholds = [Tb18_thresholds[i] for i in [8, 10, 13, 16, 19, 21, 24, 27, 29, 32, 35, 38, 40, 43]]
+            nearest_amsu_views = [8, 10, 13, 16, 19, 21, 24, 27, 29, 32, 35, 38, 40, 43]
+            Tb18_thresholds = [Tb18_thresholds[i] for i in nearest_amsu_views]
         
         if instrument in ['MHS', 'AMSUB', 'SSMT2']:
             # clouds are there, if either the Tb of channel 18 is smaller than a threshold, or...
@@ -241,11 +232,10 @@ class FCDR:
         elif instrument == 'HIRS':
             #Tb8_threshold = 235
             #delta_Tb8_Tb12_threshold = 25
+            #cloud_mask = np.logical_or(
+            #self.brightness_temp[8] <= Tb8_threshold,
+            #(self.brightness_temp[8] - self.brightness_temp[12]) <= delta_Tb8_Tb12_threshold)
             Tb12_threshold = 240
-            
-#            cloud_mask = np.logical_or(
-#                    self.brightness_temp[8] <= Tb8_threshold,
-#                    (self.brightness_temp[8] - self.brightness_temp[12]) <= delta_Tb8_Tb12_threshold)
             cloud_mask = self.brightness_temp[12] < Tb12_threshold
         
         self.cloud_mask = cloud_mask
@@ -260,8 +250,9 @@ class FCDR:
         else:
             uth_channel = 3
         quality_and_issue_mask = {}
-        # total mask is combination of cloud mask, general quality mask
-        # and quality issue mask of the UTH channel
+        # total mask is combination of cloud mask, general quality mask,
+        # quality issue mask of the UTH channel and all other pixels that
+        # are masked in the FCDR file (nanmask)
         nanmask = np.isnan(self.brightness_temp[uth_channel])
         if instrument in ['AMSUB', 'MHS', 'SSMT2']:
             quality_and_issue_mask = np.logical_or(
@@ -301,6 +292,7 @@ class FCDR:
         """ Generates a mask indicating where the satellite was in ascending/
         descending node. True indicates ascending, False indicates descending.
         """
+        # latitude increases --> ascending
         is_ascending = np.diff(self.latitude, axis=0) >= 0 
         is_ascending = np.append(is_ascending, [is_ascending[-1,:]], axis=0)
         

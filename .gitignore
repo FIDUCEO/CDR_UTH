@@ -1,6 +1,9 @@
 __pycache__
 processing/plots
 processing/.ipynb_checkpoints
+processing/CDR_plot_test.py
+processing/CDRs_incl_full_propagation.py
+processing/structured_uncertainties_test.py
 CDR_files
 FCDR_files
 *.nc

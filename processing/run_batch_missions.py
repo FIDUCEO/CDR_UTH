@@ -30,36 +30,36 @@ cdr_path = '/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1'
 # True, if existing CDR files with the same name should be overwritten
 overwrite = True
 # specifiy instruments, satellites, start and end year of the mission
-instruments = ['SSMT2']
+instruments = ['MHS']
 satellites = dict.fromkeys(instruments)
-#satellites['MHS'] = ['Noaa18', 'Noaa19', 'Metopa', 'Metopb']
-#satellites['AMSUB'] = #['Noaa15', 'Noaa16', 'Noaa17']
-satellites['SSMT2'] = ['f11', 'f12', 'f14', 'f15']
+satellites['MHS'] = ['Metopb']#['Noaa18', 'Noaa19', 'Metopa', 'Metopb']
+#satellites['AMSUB'] = ['Noaa15', 'Noaa16', 'Noaa17']
+#satellites['SSMT2'] = ['f11', 'f12', 'f14', 'f15']
 #satellites['MHS'] = ['Noaa19']
 start_year = {i: {} for i in instruments}
 end_year = {i: {} for i in instruments}
 #start_year['MHS']['Metopa'] = 2007
 #end_year['MHS']['Metopa'] = 2018
-#start_year['MHS']['Metopb'] = 2013
-#end_year['MHS']['Metopb'] = 2018
+start_year['MHS']['Metopb'] = 2013
+end_year['MHS']['Metopb'] = 2018
 #start_year['MHS']['Noaa19'] = 2009
 #end_year['MHS']['Noaa19'] = 2018
 #start_year['MHS']['Noaa18'] = 2005
 #end_year['MHS']['Noaa18'] = 2018
 #start_year['AMSUB']['Noaa15'] = 1999
-#end_year['AMSUB']['Noaa15'] = 2011
+#end_year['AMSUB']['Noaa15'] = 2013
 #start_year['AMSUB']['Noaa16'] = 2001
 #end_year['AMSUB']['Noaa16'] = 2014
 #start_year['AMSUB']['Noaa17'] = 2002
 #end_year['AMSUB']['Noaa17'] = 2014
-start_year['SSMT2']['f11'] = 1994
-end_year['SSMT2']['f11'] = 1995
-start_year['SSMT2']['f12'] = 1994
-end_year['SSMT2']['f12'] = 2001
-start_year['SSMT2']['f14'] = 1997
-end_year['SSMT2']['f14'] = 2005
-start_year['SSMT2']['f15'] = 2000
-end_year['SSMT2']['f15'] = 2005
+#start_year['SSMT2']['f11'] = 1994
+#end_year['SSMT2']['f11'] = 1995
+#start_year['SSMT2']['f12'] = 1994
+#end_year['SSMT2']['f12'] = 2001
+#start_year['SSMT2']['f14'] = 1997
+#end_year['SSMT2']['f14'] = 2005
+#start_year['SSMT2']['f15'] = 2000
+#end_year['SSMT2']['f15'] = 2005
 
 # -----------------------------BATCH JOBS----------------------------- #
 # create one batch job for each year of each satellite mission
@@ -67,7 +67,7 @@ for i in instruments:
     for s in satellites[i]:
         for year in np.arange(start_year[i][s], end_year[i][s]+1):
             jobname = i+s+str(year)
-            cmd = 'sbatch_simple -x "ctc[132-134]" {n} 16 python create_CDR_year.py {i} {s} {y} {v} {vc} {fp} {cp} {o}'.format(
+            cmd = 'sbatch_simple {n} 16 python create_CDR_year.py {i} {s} {y} {v} {vc} {fp} {cp} {o}'.format( #um bestimmte Cores frei zu lassen: -x "ctc[132-134]"
                     n=jobname, 
                     i=i, 
                     s=s, 
