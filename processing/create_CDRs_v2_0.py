@@ -46,11 +46,11 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
             makedirs(cdr_fullpath)
     
     if instrument == 'HIRS':
-        viewing_angles = [i for i in range(17, 41)] #+/- 12 around Nadir #center: 28,29
+        viewing_angles = [i for i in range(19, 39)] #+/- 10 around Nadir #center: 28,29
     elif instrument == 'SSMT2':
-        viewing_angles = [i for i in range(9, 19)] # +/- 5 around Nadir #center: 13,14
+        viewing_angles = [i for i in range(10, 20)] # +/- 5 around Nadir #center: 13,14
     else:
-        viewing_angles = [i for i in range(33, 58)] #+/- 13 around Nadir #center: 45,46
+        viewing_angles = [i for i in range(32, 60)] #+/- 14 around Nadir #center: 45,46
             
     lat_boundaries = [-30, 30]
     lon_boundaries = [-179, 180]
@@ -105,7 +105,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
 if __name__ == '__main__':
     
     cdr_path = '../CDR_files/Test/'
-    fcdr_path = '/scratch/uni/u237/user_data/ihans/FCDR/easy/v4_1fv2_0_1/'
+    fcdr_path = '/scratch/uni/u237/data/fiduceo-fcdr/easy/v4_1fv2_0_1'
     version='0_0'
     version_comment = 'Test run for own use'
     
@@ -114,7 +114,7 @@ if __name__ == '__main__':
 #    satellites['MHS'] = ['Noaa18']
 #    satellites['AMSUB'] = ['Noaa19']
 #    satellites['HIRS'] = ['Noaa11']
-    satellites['SSMT2'] = ['f12']
+    satellites['SSMT2'] = ['f15']
     start_date = {i: {} for i in instruments}
     end_date = {i: {} for i in instruments}
 #    start_date['MHS']['Metopb'] = datetime.date(2013, 2, 1)
@@ -123,8 +123,8 @@ if __name__ == '__main__':
 #    end_date['MHS']['Noaa18'] = datetime.date(2012, 7, 31)    
 #    start_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 1)
 #    end_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 2)
-    start_date['SSMT2']['f12'] = datetime.date(1997, 7, 1)
-    end_date['SSMT2']['f12'] = datetime.date(1997, 8, 1)
+    start_date['SSMT2']['f15'] = datetime.date(2003, 1, 1)
+    end_date['SSMT2']['f15'] = datetime.date(2003, 1, 30)
     
     for i in instruments:
         regr_params_file = 'regression_parameters/regr_params_{}.xml'.format(i.lower())
