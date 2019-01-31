@@ -8,6 +8,5 @@ CDR_files
 FCDR_files
 *.nc
 *.pkl
-*.txt
 *.out
 *.err
