@@ -40,7 +40,7 @@ def create_CDRs(instrument, satellite, start_date, end_date, version, version_co
     
     cdr_fullpath = join(cdr_path, str(instrument.upper()), str(satellite.upper()), 
                     str(start_date.year))
-    #cdr_path = '.'
+    #cdr_path = '.'u300740
     # create directory for CDRs if it does not exist
     if not exists(cdr_fullpath):
             makedirs(cdr_fullpath)
