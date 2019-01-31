@@ -3,15 +3,15 @@
 """
 Created on Fri Jun 22 16:52:03 2018
 
-@author: u300740
+@author: Theresa Lang
+
+The FCDR class provides methods to read FCDR files in NetCDF format, to 
+apply FCDR quality masks, to filter out clouds and to rescale brightness 
+temperature to UTH.
 """
 import numpy as np
 import os.path
 from netCDF4 import Dataset
-import pandas as pd
-from scipy.sparse import csr_matrix, csc_matrix, diags, bmat, block_diag
-import matplotlib.pyplot as plt
-import datetime
 import processing.utils as utils
 
 class FCDR:

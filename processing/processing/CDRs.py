@@ -4,14 +4,15 @@
 Created on Fri May  4 10:04:57 2018
 
 @author: Theresa Lang
+
+The class CDR provides methods to aggregate pixels on a regular lat/lon grid,
+to perform monthly averaging (including uncertainty propagation) and to write
+and read CDR files in NetCDF format.
 """
 import numpy as np
 import pandas as pd
 from os.path import join, exists
 from os import makedirs
-from scipy.sparse import csr_matrix, csc_matrix, diags, bmat, block_diag
-import matplotlib.pyplot as plt 
-import time
 from datetime import datetime
 from calendar import monthrange
 from fiduceo.cdr.writer.cdr_writer import CDRWriter
@@ -306,6 +307,7 @@ class CDR:
         u_Tb_full = {t: dict.fromkeys(branches) for t in u_types}
         u_uth = {t: dict.fromkeys(branches) for t in u_types}
         Tb_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
+        Tb_full_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
         UTH_std = {b: np.ones((num_lats, num_lons)) * np.nan for b in branches}
         count = dict.fromkeys(branches)
         count_all = dict.fromkeys(branches)
@@ -334,6 +336,7 @@ class CDR:
                 UTH_mean[b] = np.around(np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) , 2)
 
                 Tb_std[b] = np.nanstd([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0, ddof=1)
+                Tb_full_std[b] = np.nanstd([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0, ddof=1)
                 UTH_std[b] = np.nanstd([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0, ddof=1)
                 # add counts
                 count[b] = np.nansum([CDRs[i].observation_count[b] for i in range(num_timesteps)], axis=0)
@@ -382,6 +385,7 @@ class CDR:
             ret.BT_full = Tb_full_mean
             ret.uth = UTH_mean
             ret.BT_inhomogeneity = Tb_std
+            ret.BT_full_inhomogeneity = Tb_full_std
             ret.uth_inhomogeneity = UTH_std
             ret.observation_count = count
             ret.observation_count_all = count_all
@@ -453,7 +457,7 @@ class CDR:
                        'overpass_count',
                        'uth', 'BT', 'BT_full',
                        'uth_inhomogeneity', 'BT_inhomogeneity',
-                       'time_ranges']
+                       'BT_full_inhomogeneity', 'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',
                         'geospatial_lon_resolution', 'geospatial_lat_resolution']
         for var in simple_vars:
@@ -514,6 +518,7 @@ class CDR:
                        'overpass_count',
                        'uth', 'BT', 'BT_full',
                        'uth_inhomogeneity', 'BT_inhomogeneity',
+                       'BT_full_inhomogeneity',
                        'time_ranges']
         simple_attrs = ['source', 'time_coverage_duration',
                         'geospatial_lon_resolution', 'geospatial_lat_resolution',
