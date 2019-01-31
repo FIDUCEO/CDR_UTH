@@ -41,10 +41,29 @@ fcdr_path = sys.argv[6]
 cdr_path = sys.argv[7]
 overwrite = bool(sys.argv[8])
 
-# ---------------------------SCALING COEFFICIENTS ------------------------- #
+# --------------------CDR CHARACTERISTICS TO SPECIFY ---------------------- #
+
+# pixels (around nadir) to use in the CDR
+pixels_around_nadir = {}
+pixels_around_nadir['HIRS'] = 10 # +/- 10 pixels around nadir
+pixels_around_nadir['SSMT2'] = 5 # +/- 5 pixels around nadir
+pixels_around_nadir['AMSUB'] = 14 # +/- 14 pixels around nadir
+pixels_around_nadir['MHS'] = 14 # +/- 14 pixels around nadir
+
+# UTH scaling coefficients
 # location and names of files containing the UTH scaling coefficients:
 regr_params_path = 'regression_parameters'
-regr_params_file = 'regr_params_{}.xml'.format(instrument.lower()) #'regr_params_old_definition_amsu.xml'
+regr_params_file = 'regr_params_{}.xml'.format(instrument.lower())
+
+# Lat/Lon grid
+# grid boundaries: use only latitudes from 30°S to 30°N (tropical region)
+lat_boundaries = [-30, 30]
+lon_boundaries = [-179, 180]
+# resolution of lat/lon grid
+resolution = 1.0
+ 
+# ---------------------------SCALING COEFFICIENTS ------------------------- #
+
 # read scaling coefficients
 regr_slopes, regr_intercepts = utils.regression_params_from_xml(
         join(regr_params_path, regr_params_file)
@@ -56,24 +75,16 @@ end_date = datetime.date(year=year, month=12, day=31)
 # ----------------------------PIXEL SELECTION ------------------------------#
 # Satellite viewing angles used for the CDR
 # only pixels close to nadir are chosen (see CDR product user guide for more information)
-if instrument == 'HIRS':
-    # HIRS: +/- 12 pixels around Nadir are used, center pixels: 28,29
-    viewing_angles = [i for i in range(17, 41)] 
-elif instrument == 'SSMT2':
-    # SSMT2: +/- 5 pixels around Nadir are used, center pixels: 13,14
-    viewing_angles = [i for i in range(9, 19)] 
-elif instrument == 'AMSUB' or instrument == 'MHS':
-    # AMSU-B: +/- 13 pixels around Nadir are used, center pixels: 45,46
-    viewing_angles = [i for i in range(33, 58)] 
-        
-# -----------------------------LAT/LON GRID --------------------------------#
-# grid boundaries: use only latitudes from 30°S to 30°N (tropical region)
-lat_boundaries = [-30, 30]
-lon_boundaries = [-179, 180]
-# resolution of lat/lon grid
-resolution = 1.0
+nadir_pixels = {}
+nadir_pixels['HIRS'] = (28, 29)
+nadir_pixels['SSMT2'] = (14, 15)
+nadir_pixels['AMSUB'] = (45, 46)
+nadir_pixels['MHS'] = (45, 46)
 
-# ----------------------------CDR PROCESSING-------------------------------#
+pixel_range = range(nadir_pixels[instrument][0] - pixels_around_nadir[instrument] + 1, nadir_pixels[instrument][1] + pixels_around_nadir[instrument]) 
+viewing_angles = [i for i in pixel_range]
+
+# ----------------------------CDR PROCESSING--------------------------------#
 date = start_date
 day_delta = datetime.timedelta(days=1)
 last_day_of_month = datetime.date(
