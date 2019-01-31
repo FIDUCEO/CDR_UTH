@@ -1,0 +1,54 @@
+All scripts that are needed to process the l3 UTH CDR are located in the folder FIDUCEO/CDR_UTH/processing. 
+
+Important: The python package "Typhon" is needed for the processing. It is a collection of tools for atmospheric research for Python 3. 
+It is available under: http://radiativetransfer.org/tools/  
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+Overview of code:
+
+The following Python scripts are needed for the CDR processing:
+
+processing/run_batch_missions.py
+processing/sbatch_simple
+processing/create_CDR_year.py
+processing/processing/FCDRs.py
+processing/processing/CDRs.py
+processing/processing/utils.py
+processing/processing/__init__.py
+
+Additional scripts can be used for plotting, but are not needed for the processing itself.
+
+The core processing script is create_CDR_year.py. It creates monthly CDR files from one year of FCDR files for a specified instrument
+and satellite. When called via run_batch_missions.py, several years of data can be processed in parallel. 
+create_CDR_year.py uses FCDRs.py to read in the FCDR data, filter clouds, apply quality masks and scale brightness temperature to UTH.
+CDRs.py is used to aggregate pixels on a lat/lon grid, perform monthly averaging and write the data to NetCDF files.  
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Procedure: Run CDR production
+
+To run the CDR processing without any changes to version 1.1., proceed with section B. If you want to make changes to some CDR parameters, start with section A:
+
+Section A:
+
+1. Open the script create_CDR_year.py and move to the section 'CDR CHARACTERISTICS TO SPECIFY'.
+2. To change the number of pixels around nadir in the satellite swath that are used for the CDR processing, edit the variable pixels_around_nadir.
+3. To change the regression coefficients used to scale brightness temperature to UTH, edit the variables regression_params_path and regression_params_file.
+4. To change the boundaries and resolution of the lat/lon grid, edit the variables lat_boundaries, lon_boundaries and resolution.
+
+
+Section B:
+
+1. Open the script run_batch_missions.py
+2. Specify the following parameters:
+	version (string): CDR version (will be integrated in the filename and the global attributes in the CDR files)
+	version_comment (string): Comment on this CDR version
+	fcdr_path (string): Path to the FCDR files. Note that the subfolders are expected to have the following format: /SATELLITE/YEAR/MONTH/DAY
+	cdr_path (string): Path to store the CDR files.
+	overwrite (boolean): When set to "True", existing CDR files are overwritten
+	instruments (list of strings): List of instruments for which CDR is processed
+	satellites (dictionary): Satellites to be processed for each instrument
+	start_year (dictionary): First year to be processed for each instrument and satellite
+	end_year (dictionary): Last year to be processed for each instrument and satellite
+3. Run run_batch_missions.py and thereby send jobs to the queue. The script create_CDR_year.py is called separately for each instrument, satellite and year.
+
+
