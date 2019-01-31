@@ -13,7 +13,7 @@ from processing import CDRs
 from processing import plots
 import numpy as np
 #%% load NetCDF file 
-example_CDR = CDRs.CDR.fromNetCDF('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_0/MHS/NOAA18/2012/FIDUCEO_CDR_UTH_MHS_NOAA18_20120701000000_20120731235959_L3_v1_0_fv2.0.0.nc')
+example_CDR = CDRs.CDR.fromNetCDF('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1/SSMT2/F15/2004/FIDUCEO_CDR_UTH_SSMT2_F15_20041101000000_20041130235959_L3_v1_1_fv2.0.0.nc')
 
 # specify branch to plot
 b = 'ascending'
