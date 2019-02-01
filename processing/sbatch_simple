@@ -1,0 +1,68 @@
+#!/bin/bash
+
+if (( $# < 3 )); then
+	echo "Usage: $0 [-a|-x NODELIST] JOBNAME NCORES COMMAND" >&2
+    echo "  -a    Use all nodes including thunder7" >&2
+    echo "  -x    Exclude specified nodes:" >&2
+    echo "        -x \"ctc[132-134]\"    Exclude group of three nodes" >&2
+    echo "        -x \"ctc132,ctc134\"  Exclude only two nodes" >&2
+    echo "        A list of available nodes can generated with 'sinfo -N'" >&2
+    echo "  -d    Dependency for example: after:jobid" >&2
+	exit 1
+fi
+
+IGNORENODES=""
+if [[ "$1" == "-a" ]]; then
+    shift
+elif [[ "$1" == "-x" ]]; then
+    shift
+    IGNORENODES="-x $1,cthunder7"
+    shift
+else
+    IGNORENODES='-x cthunder7'
+fi
+
+DEPEND=
+if [[ "$1" == "-d" ]]; then
+    shift
+    DEPEND="-d $1"
+    shift
+fi
+
+JOBNAME=$1
+shift
+
+if (( "$1" < 1 )); then
+    echo "ERROR: Illegal number of cores. NCORES > 0, was '$1'" >&2
+    exit 1
+fi
+
+NCORES=$1
+shift
+
+sbatch $IGNORENODES $DEPEND << _EOF_
+#!/bin/bash
+#SBATCH --job-name=$JOBNAME
+#SBATCH --output=$JOBNAME-%j.out
+#SBATCH --error=$JOBNAME-%j.err
+
+#SBATCH --account=uni
+#SBATCH --partition=uni-u237
+#SBATCH --nodes=1-1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=$NCORES
+
+source /sw/share/Modules/init/bash
+GROUPBASHRC=/scratch/uni/u237/sw/profile.apmet/apmet.sh
+USERBASHRC=/scratch/uni/u237/users/batch_config/$USER.bashrc
+if [[ -e \$USERBASHRC ]]; then
+    source \$USERBASHRC
+else
+    source \$GROUPBASHRC
+fi
+
+export MPLBACKEND=Agg
+
+OMP_NUM_THREADS=$NCORES $@
+_EOF_
+
