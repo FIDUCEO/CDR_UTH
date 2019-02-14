@@ -20,17 +20,17 @@ import os
 # ----------------------------PLEASE SPECIFY-------------------------- #
 
 # CDR version (for CDR filename)
-version = '1_1'
+version = '1_2'
 # comment on this CDR version (will be included in each CDR file)
-version_comment = 'Version_1.1_of_UTH_CDR_based_on_Microwave_FCDR_Version_4.1.'
+version_comment = 'Version_1.2_of_UTH_CDR_based_on_Microwave_FCDR_Version_4.1.'
 # path to FCDR input
 fcdr_path = '/scratch/uni/u237/data/fiduceo-fcdr/easy/v4_1fv2_0_1'
 # path for CDR output
-cdr_path = '/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1'
+cdr_path = '/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1/v1_2'
 # True, if existing CDR files with the same name should be overwritten
 overwrite = True
 # specifiy instruments, satellites, start and end year of the mission
-instruments = ['MHS']
+instruments = ['MHS', 'AMSUB', 'SSMT2']
 satellites = dict.fromkeys(instruments)
 satellites['MHS'] = ['Noaa18', 'Noaa19', 'Metopa', 'Metopb']
 satellites['AMSUB'] = ['Noaa15', 'Noaa16', 'Noaa17']
