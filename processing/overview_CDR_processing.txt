@@ -26,7 +26,7 @@ CDRs.py is used to aggregate pixels on a lat/lon grid, perform monthly averaging
 
 Procedure: Run CDR production
 
-To run the CDR processing without any changes to version 1.1., proceed with section B. If you want to make changes to some CDR parameters, start with section A:
+To run the CDR processing without any changes to version 1.2., proceed with section B. If you want to make changes to some CDR parameters, start with section A:
 
 Section A:
 
