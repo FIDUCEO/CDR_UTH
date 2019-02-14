@@ -126,8 +126,8 @@ class FCDR:
                 uncertainty['structured'][channel] = f.variables['u_structured_Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
                 uncertainty['independent'][channel] = f.variables['u_independent_Ch{}_BT'.format(channel_name)][:, viewing_angles].filled(np.nan)
                 quality_issue[channel] = f.variables['quality_issue_pixel_Ch{}_bitmask'.format(channel_name)][:, viewing_angles]
-                #corr_vector[channel] = f.variables['cross_line_correlation_coefficients'][:, channel-1]
-                corr_vector[channel] = []
+                corr_vector[channel] = f.variables['cross_line_correlation_coefficients'][:, channel-1]
+                #corr_vector[channel] = []
         else:
             for channel in channels:
                 brightness_temp[channel] = f.variables['bt'][channel - 1, :, viewing_angles]
