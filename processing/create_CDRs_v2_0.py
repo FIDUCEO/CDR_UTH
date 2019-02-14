@@ -109,22 +109,22 @@ if __name__ == '__main__':
     version='0_0'
     version_comment = 'Test run for own use'
     
-    instruments = ['SSMT2']
+    instruments = ['AMSUB']
     satellites = dict.fromkeys(instruments)
 #    satellites['MHS'] = ['Noaa18']
-#    satellites['AMSUB'] = ['Noaa19']
+    satellites['AMSUB'] = ['Noaa16']
 #    satellites['HIRS'] = ['Noaa11']
-    satellites['SSMT2'] = ['f15']
+#    satellites['SSMT2'] = ['f15']
     start_date = {i: {} for i in instruments}
     end_date = {i: {} for i in instruments}
 #    start_date['MHS']['Metopb'] = datetime.date(2013, 2, 1)
 #    end_date['MHS']['Metopb'] = datetime.date(2017, 10, 31)
 #    start_date['MHS']['Noaa18'] = datetime.date(2012, 7, 1)
 #    end_date['MHS']['Noaa18'] = datetime.date(2012, 7, 31)    
-#    start_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 1)
-#    end_date['AMSUB']['Noaa19'] = datetime.date(2001, 1, 2)
-    start_date['SSMT2']['f15'] = datetime.date(2003, 1, 1)
-    end_date['SSMT2']['f15'] = datetime.date(2003, 1, 30)
+    start_date['AMSUB']['Noaa16'] = datetime.date(2006, 1, 1)
+    end_date['AMSUB']['Noaa16'] = datetime.date(2006, 1, 2)
+#    start_date['SSMT2']['f15'] = datetime.date(2003, 1, 1)
+#    end_date['SSMT2']['f15'] = datetime.date(2003, 1, 30)
     
     for i in instruments:
         regr_params_file = 'regression_parameters/regr_params_{}.xml'.format(i.lower())
