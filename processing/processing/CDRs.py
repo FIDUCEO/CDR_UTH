@@ -48,7 +48,7 @@ class CDR:
     def GriddedCDRFromFCDRs(cls, FCDRs,
                             lat_boundaries=[-90, 90], lon_boundaries =[-179, 180], 
                             resolution=1.):
-        """ Creates one CDR from from a list of FCDRs.
+        """ Creates one CDR from from a list of FCDRs (e.g. one day of FCDRs).
         The CDR contains mean brightness temperatures and UTH binned to a 
         lat/lon grid as well as 3 uncertainty classes for every grid cell. 
         Uncertainty correlations between grid cells are NOT propagated!
@@ -59,8 +59,6 @@ class CDR:
             lon_boundaries (list): lower and upper boundary for longitude-grid
             resolution (float): resolution of lat/lon grid [degree] (default: 1.0)
         """
-        #t1 = time.clock()
-        
         instrument = FCDRs[0].instrument
         u_types = ['independent', 'common', 'structured']
         if instrument == 'HIRS':
@@ -129,15 +127,8 @@ class CDR:
                     (data_unfiltered['longitude'] > lon_bins[0])
                     )].reset_index()
 
-#            fig, ax = plt.subplots()
-#            ax.set_title(b)
-#            ax.scatter(data.longitude, data.latitude, c=data.brightness_temp, s=1)
-#            ax.set_xlim(lon_bins[0], lon_bins[-1])
-#            ax.set_ylim(lat_bins[0], lat_bins[-1])
-
+            # check whether there was an overpass in the selected grid
             if len(data.index) <= 1 and len(data_unfiltered.index) <=1:
-                # no overpass in the selected grid
-                print('dataframe is empty!')
                 is_empty = True
             else:
                 # bin data to latitude and longitude bins
@@ -209,10 +200,10 @@ class CDR:
                             ) / group_size
                     # common uncertainty for this grid cell 
                     # (fully correlated uncertainties --> uncertainty of average is average of uncertainties)
-                    # Only MW FCDRs contain common uncertainties
                     u_Tb_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_Tb['common'])
                     u_uth_gridded['common'][b][lat_ind, lon_ind] = np.mean(group_variances_uth['common'])
                     # structured uncertainty for this grid cell
+                    # (calculate from covariance matrix)
                     u_Tb_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_Tb)) / group_size
                     u_uth_gridded['structured'][b][lat_ind, lon_ind] = np.sqrt(np.sum(S_struct_uth)) / group_size
                 
@@ -281,7 +272,8 @@ class CDR:
 
     @classmethod
     def AveragedCDRFromCDRs(cls, CDRs):
-        """ Combines several CDRs to one averaged CDR by calculating an ordinary 
+        """ Combines several CDRs (e.g. daily CDRs) to one averaged CDR 
+        (e.g. monthly CDR) by calculating an ordinary 
         average of brightness temperature and UTH for every grid cell. 
         Uncertainties are propagated using the Law of the Propagation of 
         Uncertainty for the case of an ordenary average.
@@ -319,6 +311,7 @@ class CDR:
         files = []
         is_empty = False
         
+        # get first and last CDR in the list that are not empty
         first_not_empty = utils.getFirstNotEmptyCDR(CDRs)
         last_not_empty = utils.getLastNotEmptyCDR(CDRs)
         
@@ -331,21 +324,20 @@ class CDR:
                 for i in range(num_timesteps):
                     files.extend(CDRs[i].source)
                 notnan_count = np.sum([~np.isnan(CDRs[i].BT[b]) for i in range(num_timesteps)], axis=0)
+                # calculate averages and round them to two decimals
                 Tb_mean[b] = np.around(np.nanmean([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0), 2)
                 Tb_full_mean[b] = np.around(np.nanmean([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0), 2)
                 UTH_mean[b] = np.around(np.nanmean([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0) , 2)
-
+                # calculate standard deviations
                 Tb_std[b] = np.nanstd([CDRs[i].BT[b] for i in range(num_timesteps)], axis=0, ddof=1)
                 Tb_full_std[b] = np.nanstd([CDRs[i].BT_full[b] for i in range(num_timesteps)], axis=0, ddof=1)
                 UTH_std[b] = np.nanstd([CDRs[i].uth[b] for i in range(num_timesteps)], axis=0, ddof=1)
-                # add counts
+                # add counts together
                 count[b] = np.nansum([CDRs[i].observation_count[b] for i in range(num_timesteps)], axis=0)
                 count[b][count[b] == 0] = -32767
                 count_all[b] = np.nansum([CDRs[i].observation_count_all[b] for i in range(num_timesteps)], axis=0)
                 count_all[b][count_all[b] == 0] = -32767
-                count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)
-                # setting new quality flags based on counts - not possible yet
-                # quality_bitmask[b] = utils.getCDRQualityMask(count[b], count_overpasses[b])                
+                count_overpasses[b] = np.nansum([CDRs[i].overpass_count[b] for i in range(num_timesteps)], axis=0)                
                 
                 # combine time ranges
                 second_of_day_min[b] = np.nanmin([CDRs[i].time_ranges[b][0] for i in range(num_timesteps)], axis=0)
@@ -357,15 +349,16 @@ class CDR:
                 # combine uncertainties
                 notnan_count = np.sum([~np.isnan(CDRs[i].u_Tb['independent'][b]) for i in range(num_timesteps)], axis=0)
                 notnan_count_full = np.sum([~np.isnan(CDRs[i].u_Tb_full['independent'][b]) for i in range(num_timesteps)], axis=0)
+                # independent and structured uncertainties (not correlated in time)
                 for t in ['independent', 'structured']:
                     u_Tb[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
                     u_Tb_full[t][b] = np.sqrt(np.nansum([CDRs[i].u_Tb_full[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count_full
                     u_uth[t][b] = np.sqrt(np.nansum([CDRs[i].u_uth[t][b] ** 2 for i in range(num_timesteps)], axis=0)) / notnan_count
-
+                # common uncertainties (fully correlated in time)
                 u_Tb['common'][b] = np.nanmean([CDRs[i].u_Tb['common'][b] for i in range(num_timesteps)], axis=0)
                 u_Tb_full['common'][b] = np.nanmean([CDRs[i].u_Tb_full['common'][b] for i in range(num_timesteps)], axis=0)
                 u_uth['common'][b] = np.nanmean([CDRs[i].u_uth['common'][b] for i in range(num_timesteps)], axis=0)
-                # round uncertainties to 4 digits:
+                # round uncertainties to 4 decimals:
                 numdigits = 4
                 for t in u_types:
                     u_Tb[t][b] = np.around(u_Tb[t][b], numdigits)
@@ -404,7 +397,6 @@ class CDR:
             ret.is_empty = is_empty
     
         else:
-            print('No data in this month.')
             ret.is_empty = True
         
         return ret
@@ -452,6 +444,7 @@ class CDR:
             makedirs(CDR_path)
         
         ds = CDRWriter.createTemplate('UTH', numlons, numlats)
+        # Variables:
         simple_vars = ['lat', 'lon', 'lat_bnds', 'lon_bnds']
         branch_vars = ['observation_count', 'observation_count_all',
                        'overpass_count',
@@ -476,7 +469,8 @@ class CDR:
                 for b in branches:
                     ds.variables['u_{}_{}_{}'.format(t, q, b)].data =\
                     getattr(self, 'u_{}'.format(q))[t]['{}ing'.format(b)]
-
+        
+        # Attributes:
         ds.attrs['institution'] = 'University of Hamburg'
         ds.attrs['title'] = 'Upper Tropospheric Humidity (UTH)'
         ds.attrs['time_coverage_start'] = start_time.strftime(DATE_PATTERN)
@@ -491,6 +485,7 @@ class CDR:
         ds.attrs['comment'] = comment_on_version
         ds.attrs['auxiliary_data'] = ''
         ds.attrs['configuration'] = ''
+        # Write to NetCDF (with CDRWriter)
         CDRWriter.write(ds, join(CDR_path, CDR_filename), overwrite=overwrite)
         
         print('CDR {} for {} on {} saved as {}'.format(

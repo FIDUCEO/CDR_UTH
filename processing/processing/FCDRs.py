@@ -47,13 +47,12 @@ class FCDR:
         Parameters:
             fcdr_path (str): path to directory with NetCDF file
             filename (str): name of NetCDF file 
-            viewing_angles (list): list of viewing angles/ pixels that should 
+            viewing_angles (list): list of pixels that should 
                 be used (e.g. [44, 45] for innermost angles only)
         """
         ret = cls()
         # read data from NetCDF file
         f = Dataset(os.path.join(fcdr_path, filename))
-        
         # get information from file name
         filename = os.path.basename(filename)
         file_info = utils.getFileInfo(filename)
@@ -178,6 +177,7 @@ class FCDR:
         self.uth_channel = uth_channel
         viewing_angles = self.viewing_angles
         brightness_temp = self.brightness_temp[uth_channel].data
+        # get uncertainties of brightness temperature
         u_Tb = {}
         for t in u_types:
             u_Tb[t] = self.u_Tb[t][uth_channel].data
@@ -230,11 +230,7 @@ class FCDR:
             cloud_mask = np.array(np.logical_or(Tb18_mask, deltaTb19_mask))
             
         elif instrument == 'HIRS':
-            #Tb8_threshold = 235
-            #delta_Tb8_Tb12_threshold = 25
-            #cloud_mask = np.logical_or(
-            #self.brightness_temp[8] <= Tb8_threshold,
-            #(self.brightness_temp[8] - self.brightness_temp[12]) <= delta_Tb8_Tb12_threshold)
+            # clouds are there if the Tb in channel 12 is smaller than 240 K
             Tb12_threshold = 240
             cloud_mask = self.brightness_temp[12] < Tb12_threshold
         

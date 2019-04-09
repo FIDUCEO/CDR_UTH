@@ -18,7 +18,7 @@ def get_filenames_daily(path, instrument, satellite, year, month, day):
     
     Parameters:
         path (str): path to directory with FCDRs 
-        instrument (str): name of instrument, e.g. MHS or Amsub 
+        instrument (str): name of instrument, e.g. MHS or AMSUB 
         satellite (str): name of satellite, e.g. Metopb
         year (int): year 
         month (int): month, e.g. 1 for january  
@@ -173,10 +173,6 @@ def collectFCDRData(FCDRs, u_types, uth_channel=3):
     collected_data_unfiltered['scanline'] = scanline_unfiltered
     for t in u_types:
         collected_data_unfiltered['u_Tb_{}'.format(t)] = u_Tb_unfiltered[t]
-    
-#    collected_data_diff = {}
-#    collected_data_diff['latitude'] = latitude_diff
-#    collected_data_diff['longitude'] = longitude_diff
     
     return collected_data, collected_data_unfiltered, files
 
