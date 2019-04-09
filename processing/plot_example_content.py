@@ -13,13 +13,14 @@ from processing import CDRs
 from processing import plots
 import numpy as np
 #%% load NetCDF file 
-example_CDR = CDRs.CDR.fromNetCDF('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/Test/AMSUB/NOAA16/2006/FIDUCEO_CDR_UTH_AMSUB_NOAA16_20060101000000_20060131235959_L3_v0_0_fv2.0.0.nc')
+example_CDR = CDRs.CDR.fromNetCDF('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1/v1_2/AMSUB/NOAA17/2005/FIDUCEO_CDR_UTH_AMSUB_NOAA17_20050701000000_20050731235959_L3_v1_2_fv2.0.0.nc')
 #('/scratch/uni/u237/users/tlang/CDR/CDR_UTH/CDR_files/fromFCDRv4_1/SSMT2/F15/2004/FIDUCEO_CDR_UTH_SSMT2_F15_20041101000000_20041130235959_L3_v1_1_fv2.0.0.nc')
 
 # specify branch to plot
 b = 'ascending'
 
 #%%%%%%%%%%%%%%% UTH %%%%%%%%%%%%%%%%
+plt.rcParams.update({'font.size': 15})
 fig, ax = plt.subplots(5, 1, figsize=(10, 10))
 
 im = plots.plotCDRQuantity(example_CDR.uth[b], example_CDR.lat, example_CDR.lon, ax=ax[0], cmap=plt.get_cmap('speed', 14), vmin=0, vmax=100)
@@ -123,3 +124,42 @@ cb.set_label('[hours of day]', labelpad=-3)
 
 
 plt.tight_layout(pad=4.5, w_pad=0.3)
+
+#%%%%%%%% UTH Ascending + Descending %%%%%%%%%%%%
+######### Combined uncertainty #############
+fig, ax = plt.subplots(2, 1, figsize=(15, 5))
+
+u_ind = np.sqrt(example_CDR.u_uth['independent']['ascending'] ** 2 + example_CDR.u_uth['independent']['descending'] ** 2)
+u_struct = (example_CDR.u_uth['structured']['ascending'] + example_CDR.u_uth['structured']['descending']) / 2
+u_com = (example_CDR.u_uth['common']['ascending'] + example_CDR.u_uth['common']['descending']) / 2
+u_tot = np.sqrt(u_ind ** 2 + u_struct ** 2 + u_com ** 2)
+
+im = plots.plotCDRQuantity(
+        np.mean(np.dstack((example_CDR.uth['ascending'], example_CDR.uth['descending'])), axis=2),
+        example_CDR.lat, example_CDR.lon, ax=ax[0], cmap=plt.get_cmap('speed', 10), vmin=0, vmax=100)
+cb = fig.colorbar(im, ax=ax[0])
+cb.set_label('UTH [%]', labelpad=20)
+
+
+im = plots.plotCDRQuantity(u_tot, example_CDR.lat, example_CDR.lon, ax=ax[1], cmap=plt.get_cmap('Reds', 10), vmin=0, vmax=2.5)
+cb = fig.colorbar(im, ax=ax[1])
+cb.set_label('UTH uncertainty [%]', labelpad=20)
+
+
+#%%%%%%%% BT Ascending + Descending %%%%%%%%%%%%
+######### Combined uncertainty #############
+fig, ax = plt.subplots(2, 1, figsize=(15, 5))
+
+u_ind = np.sqrt(example_CDR.u_BT['independent']['ascending'] ** 2 + example_CDR.u_BT['independent']['descending'] ** 2)
+u_struct = (example_CDR.u_BT['structured']['ascending'] + example_CDR.u_BT['structured']['descending']) / 2
+u_com = (example_CDR.u_BT['common']['ascending'] + example_CDR.u_BT['common']['descending']) / 2
+u_tot = np.sqrt(u_ind ** 2 + u_struct ** 2 + u_com ** 2)
+
+im = plots.plotCDRQuantity(np.mean(np.dstack((example_CDR.BT['ascending'], example_CDR.BT['descending'])), axis=2),
+                           example_CDR.lat, example_CDR.lon, ax=ax[0], cmap=plt.get_cmap('temperature', 14), vmin=240, vmax=275)
+cb = fig.colorbar(im, ax=ax[0])
+cb.set_label('BT [K]', labelpad=20)
+
+im = plots.plotCDRQuantity(u_tot, example_CDR.lat, example_CDR.lon, ax=ax[1], cmap=plt.get_cmap('Reds', 10), vmin=0.3, vmax=0.55)
+cb = fig.colorbar(im, ax=ax[1])
+cb.set_label('BT uncertainty [K]', labelpad=20)

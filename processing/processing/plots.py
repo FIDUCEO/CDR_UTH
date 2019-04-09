@@ -25,7 +25,7 @@ def plotUTH(CDR, node, ax=None, **kwargs):
     default_kwargs = {}    
     if 'cmap' not in kwargs:
         default_kwargs = {
-                'cmap': plt.get_cmap('speed', 20)}
+                'cmap': plt.get_cmap('speed', 10)}
     
     lon, lat = np.meshgrid(CDR.lon, CDR.lat)
         
