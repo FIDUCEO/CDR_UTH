@@ -21,7 +21,7 @@ Development code for UTH CDR
 
 The folder processing contains the Python code to process the 1c FIDUCEO Microwave FCDR to the l3 UTH CDR.
 
-Note that you will need additional code to execute the processing: The CDR-generator code makes use of the open source code "typhon" (available through http://www.radiativetransfer.org/tools/) and the FIDUCEO NetCDF writer (available through https://github.com/FIDUCEO/FCDRTools/tree/master/fiduceo/cdr)
+Note that you will need additional code to execute the processing: The CDR-generator code makes use of the open source code "typhon" (available through http://www.radiativetransfer.org/tools/) and the FIDUCEO NetCDF writer (available through https://github.com/FIDUCEO/FCDRTools/tree/master/fiduceo/cdr).
 
 An overview of the code and its usage is provided in overview_CDR_processing.txt in processing.
 
