@@ -44,14 +44,15 @@ overwrite = bool(sys.argv[8])
 # --------------------CDR CHARACTERISTICS TO SPECIFY ---------------------- #
 
 # pixels (around nadir) to use in the CDR
+#FIXME: change back to standard values for FIDUCEO CDR!
 pixels_around_nadir = {}
 pixels_around_nadir['HIRS'] = 10 # +/- 10 pixels around nadir
 pixels_around_nadir['SSMT2'] = 5 # +/- 5 pixels around nadir
-pixels_around_nadir['AMSUB'] = 14 # +/- 14 pixels around nadir
-pixels_around_nadir['MHS'] = 14 # +/- 14 pixels around nadir
+pixels_around_nadir['AMSUB'] = 14# +/- 14 pixels around nadir
+pixels_around_nadir['MHS'] = 14# +/- 14 pixels around nadir
 
 # UTH scaling coefficients
-# location and names of files containing the UTH scaling coefficients:
+# location and names of files containing the UTH scaling coefficients:s
 regr_params_path = 'regression_parameters'
 regr_params_file = 'regr_params_{}.xml'.format(instrument.lower())
 
@@ -76,10 +77,10 @@ end_date = datetime.date(year=year, month=12, day=31)
 # Satellite viewing angles used for the CDR
 # only pixels close to nadir are chosen (see CDR product user guide for more information)
 nadir_pixels = {}
-nadir_pixels['HIRS'] = (28, 29)
-nadir_pixels['SSMT2'] = (14, 15)
-nadir_pixels['AMSUB'] = (45, 46)
-nadir_pixels['MHS'] = (45, 46)
+nadir_pixels['HIRS'] = (27, 28)
+nadir_pixels['SSMT2'] = (13, 14)
+nadir_pixels['AMSUB'] = (44, 45)
+nadir_pixels['MHS'] = (44, 45)
 
 pixel_range = range(nadir_pixels[instrument][0] - pixels_around_nadir[instrument] + 1, nadir_pixels[instrument][1] + pixels_around_nadir[instrument]) 
 viewing_angles = [i for i in pixel_range]
@@ -109,6 +110,7 @@ while date <= end_date:
                     '{m:02}'.format(m=date.month), 
                     '{d:02}'.format(d=date.day)
                     )
+        print(path)
         # Names of all FCDR files of this day
         filenames_new = glob.glob(join(path, '*.nc')) 
         # go through all files of this day (if exisiting) and read in FCDRs
